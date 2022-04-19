@@ -1,12 +1,11 @@
-#include "../bin/include/cppdtp.h"
+#include "../bin/include/cppdtp.hpp"
 
 #include <iostream>
 
 using namespace std;
 
 int main() {
-    TestClass t;
-    t.greet("CppDTP");
+    cout << cppdtp::equal(13, 79) << cppdtp::equal(123, 123) << cppdtp::equal("baz", "baz") << cppdtp::equal("foo", "bar") << endl;
 
     return 0;
 }
