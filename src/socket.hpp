@@ -17,7 +17,7 @@ namespace cppdtp {
         int sock;
 #endif
         struct sockaddr_in address;
-    };
+    }; // struct _Socket
 
 } // namespace cppdtp
 

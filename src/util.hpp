@@ -6,6 +6,8 @@
 #ifndef CPPDTP_UTIL_HPP
 #define CPPDTP_UTIL_HPP
 
+#include <string>
+
 #ifdef _WIN32
 #  include <WinSock2.h>
 #  include <Windows.h>
@@ -117,6 +119,52 @@ namespace cppdtp {
         }
 
         return size;
+    }
+
+    template <typename T>
+    std::string _construct_message(T data, size_t data_size) {
+        char* data_str = (char*)data;
+        char* message = (char*)malloc((CPPDTP_LENSIZE + data_size) * sizeof(char));
+        unsigned char size[CPPDTP_LENSIZE] = _encode_message_size(data_size);
+
+        for (int i = 0; i < CPPDTP_LENSIZE; i++) {
+            message[i] = size[i];
+        }
+
+        for (size_t i = 0; i < data_size; i++) {
+            message[i + CPPDTP_LENSIZE] = data_str[i];
+        }
+
+        std::string message_str(message);
+
+        delete[] size;
+        free(message);
+
+        return message_str;
+    }
+
+    template <typename T>
+    T _deconstruct_message(std::string message) {
+        // only the first CPPDTP_LENSIZE bytes of message will be read as the size
+        size_t data_size = _decode_message_size((unsigned char*)(&message[0]));
+        char* data = (char*)malloc(data_size * sizeof(char));
+
+        for (size_t i = 0; i < data_size; i++) {
+            data[i] = message[i + CPPDTP_LENSIZE];
+        }
+
+        return (T)data;
+    }
+
+    void sleep(double seconds) {
+#ifdef _WIN32
+        Sleep(seconds * 1000);
+#else
+        struct timespec ts;
+        ts.tv_sec = seconds;
+        ts.tv_nsec = ((int)(seconds * 1000) % 1000) * 1000000;
+        nanosleep(&ts, NULL);
+#endif
     }
 
 } // namespace cppdtp

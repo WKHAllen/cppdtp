@@ -198,6 +198,165 @@ namespace cppdtp {
             // TODO: call connection handle method
             // _cdtp_client_call_handle(client);
         }
+
+        void connect(std::string host) {
+            connect(host, CPPDTP_PORT);
+        }
+
+        void connect() {
+            connect(INADDR_ANY, CPPDTP_PORT);
+        }
+
+        void disconnect() {
+            connected = false;
+
+#ifdef _WIN32
+            // Close the socket
+            if (closesocket(sock.sock) != 0) {
+                // TODO: throw error
+                // _cdtp_set_err(CPPDTP_CLIENT_DISCONNECT_FAILED);
+                // return;
+            }
+
+            // Wait for threads to exit
+            if (!blocking && WaitForSingleObject(handle_thread, INFINITE) == WAIT_FAILED) {
+                // TODO: throw error
+                // _cdtp_set_error(CPPDTP_HANDLE_THREAD_NOT_CLOSING, GetLastError());
+                // return;
+            }
+#else
+            // Close the socket
+            if (close(sock.sock) != 0) {
+                // TODO: throw error
+                // _cdtp_set_err(CPPDTP_CLIENT_DISCONNECT_FAILED);
+                // return;
+            }
+
+            // Connect to the local server to simulate activity
+            std::string local_server_host = local_server.get_host();
+            unsigned short local_server_port = local_server.get_port();
+
+            int local_client_sock;
+            struct sockaddr_in local_client_address;
+
+            if ((local_client_sock = socket(CPPDTP_ADDRESS_FAMILY, SOCK_STREAM, 0)) == 0) {
+                // TODO: throw error
+                // _cdtp_set_err(CPPDTP_CLIENT_SOCK_INIT_FAILED);
+                // return;
+            }
+
+            if (inet_pton(CPPDTP_ADDRESS_FAMILY, &local_server_host[0], &(local_client_address)) != 1) {
+                // TODO: throw error
+                // _cdtp_set_err(CPPDTP_CLIENT_ADDRESS_FAILED);
+                // return;
+            }
+
+            local_client_address.sin_family = CPPDTP_ADDRESS_FAMILY;
+            local_client_address.sin_port = htons(local_server_port);
+
+            if (::connect(local_client_sock, (struct sockaddr*)&(local_client_address), sizeof(local_client_address)) < 0) {
+                // TODO: throw error
+                // _cdtp_set_err(CPPDTP_CLIENT_CONNECT_FAILED);
+                // return;
+            }
+
+            sleep(0.01);
+
+            if (close(local_client_sock) != 0) {
+                // TODO: throw error
+                // _cdtp_set_err(CPPDTP_CLIENT_DISCONNECT_FAILED);
+                // return;
+            }
+
+            // Wait for threads to exit
+            if (!blocking) {
+                int err_code = pthread_join(handle_thread, NULL);
+
+                if (err_code != 0) {
+                    // TODO: throw error
+                    // _cdtp_set_error(CPPDTP_HANDLE_THREAD_NOT_CLOSING, err_code);
+                    // return;
+                }
+            }
+#endif
+        }
+
+        bool is_connected() {
+            return connected;
+        }
+
+        std::string get_host() {
+            // Make sure the client is connected
+            if (!connected) {
+                // TODO: throw error
+                // _cdtp_set_error(CPPDTP_CLIENT_NOT_CONNECTED, 0);
+                // return NULL;
+            }
+
+            char* addr = (char*)malloc(CPPDTP_ADDRSTRLEN * sizeof(char));
+
+#ifdef _WIN32
+            int addrlen = CPPDTP_ADDRSTRLEN;
+
+            if (WSAAddressToString((LPSOCKADDR) & (sock.address), sizeof(sock.address), NULL, addr, (LPDWORD)&addrlen) != 0) {
+                // TODO: throw error
+                // _cdtp_set_err(CPPDTP_CLIENT_ADDRESS_FAILED);
+                // return NULL;
+            }
+
+            // Remove the port
+            for (int i = 0; i < CPPDTP_ADDRSTRLEN && addr[i] != '\0'; i++) {
+                if (addr[i] == ':') {
+                    addr[i] = '\0';
+                    break;
+                }
+            }
+#else
+            if (inet_ntop(CPPDTP_ADDRESS_FAMILY, &(sock.address), addr, CPPDTP_ADDRSTRLEN) == NULL) {
+                // TODO: throw error
+                // _cdtp_set_err(CPPDTP_CLIENT_ADDRESS_FAILED);
+                // return NULL;
+            }
+#endif
+
+            std::string addr_str(addr);
+            free(addr);
+
+            return addr_str;
+        }
+
+        unsigned short get_port() {
+            // Make sure the client is connected
+            if (!connected) {
+                // TODO: throw error
+                // _cdtp_set_error(CPPDTP_CLIENT_NOT_CONNECTED, 0);
+                // return 0;
+            }
+
+            return ntohs(sock.address.sin_port);
+        }
+
+        template <typename T>
+        void send(T data, size_t data_size) {
+            // Make sure the client is connected
+            if (!connected) {
+                // TODO: throw error
+                // _cdtp_set_error(CPPDTP_CLIENT_NOT_CONNECTED, 0);
+                // return;
+            }
+
+            std::string message = _construct_message(data, data_size);
+
+            if (::send(sock.sock, &message[0], CPPDTP_LENSIZE + data_size, 0) < 0) {
+                // TODO: throw error
+                // _cdtp_set_err(CPPDTP_CLIENT_SEND_FAILED);
+            }
+        }
+
+        template <typename T>
+        void send(T data) {
+            send(data, sizeof(data));
+        }
     }; // class Client
 
 } // namespace cppdtp

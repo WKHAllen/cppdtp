@@ -9,6 +9,8 @@
 #include "util.hpp"
 #include "socket.hpp"
 
+#include <string>
+
 namespace cppdtp {
 
     class Server {
@@ -19,8 +21,8 @@ namespace cppdtp {
         bool serving;
         size_t num_clients;
         _Socket sock;
-        _Socket* clients = new _Socket[0];
-        int* allocated_clients = new int[0];
+        _Socket* clients = new _Socket[1];
+        int* allocated_clients = new int[1];
 #ifdef _WIN32
         HANDLE serve_thread;
 #else
@@ -28,7 +30,15 @@ namespace cppdtp {
 #endif
 
     public:
+        std::string get_host() {
+            // TODO: return host
+            return "";
+        }
 
+        unsigned short get_port() {
+            // TODO: return port
+            return 0;
+        }
     };
 
 } // namespace cppdtp
