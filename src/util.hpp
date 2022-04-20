@@ -89,15 +89,18 @@
 #  define CPPDTP_LOCAL_SERVER_PORT (CPPDTP_PORT + 1)
 #endif
 
+// Default CPPDTP server listen backlog
+#ifndef CPPDTP_SERVER_LISTEN_BACKLOG
+#  define CPPDTP_SERVER_LISTEN_BACKLOG 3
+#endif
+
 // Length of the size portion of each message
 #define CPPDTP_LENSIZE 5
 
-namespace cppdtp {
+// Server max clients indicator
+#define CPPDTP_SERVER_MAX_CLIENTS_REACHED (-1)
 
-    template <typename T>
-    bool equal(T a, T b) {
-        return a == b;
-    }
+namespace cppdtp {
 
     unsigned char* _encode_message_size(size_t size) {
         unsigned char* encoded_size = new unsigned char[CPPDTP_LENSIZE];

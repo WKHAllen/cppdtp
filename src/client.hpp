@@ -59,7 +59,7 @@ namespace cppdtp {
                     }
                     else {
                         // TODO: throw error
-                        // _cdtp_set_error(CDTP_CLIENT_RECV_FAILED, err_code);
+                        // _cdtp_set_error(CPPDTP_CLIENT_RECV_FAILED, err_code);
                         // return;
                     }
                 }
@@ -87,7 +87,7 @@ namespace cppdtp {
                         }
                         else {
                             // TODO: throw error
-                            // _cdtp_set_error(CDTP_CLIENT_RECV_FAILED, err_code);
+                            // _cdtp_set_error(CPPDTP_CLIENT_RECV_FAILED, err_code);
                             // return;
                         }
                     }
@@ -126,7 +126,7 @@ namespace cppdtp {
                 // Check for select errors
                 if (activity < 0) {
                     // TODO: throw error
-                    // _cdtp_set_err(CDTP_SELECT_FAILED);
+                    // _cdtp_set_err(CPPDTP_SELECT_FAILED);
                     // return;
                 }
 
@@ -219,13 +219,12 @@ namespace cppdtp {
         }
 
         ~Client() {
-            // TODO: disconnect if still connected
-            // TODO: wait for threads to complete
-            // TODO: delete handle_thread if instantiated
-            // TODO: delete local_server if instantiated
+            if (connected) {
+                disconnect();
+            }
         }
 
-        void connect(std::string host, unsigned short port) {
+        void connect(std::string host, uint16_t port) {
             // Change 'localhost' to '127.0.0.1'
             if (host == "localhost") {
                 host = "127.0.0.1";
@@ -388,7 +387,7 @@ namespace cppdtp {
 
             // Connect to the local server to simulate activity
             std::string local_server_host = local_server.get_host();
-            unsigned short local_server_port = local_server.get_port();
+            uint16_t local_server_port = local_server.get_port();
 
             int local_client_sock;
             struct sockaddr_in local_client_address;
@@ -426,6 +425,7 @@ namespace cppdtp {
             // Wait for threads to exit
             if (!blocking) {
                 handle_thread->join();
+                delete handle_thread;
             }
         }
 
@@ -464,16 +464,16 @@ namespace cppdtp {
                 // TODO: throw error
                 // _cdtp_set_err(CPPDTP_CLIENT_ADDRESS_FAILED);
                 // return NULL;
-                }
+            }
 #endif
 
             std::string addr_str(addr);
             free(addr);
 
             return addr_str;
-            }
+        }
 
-        unsigned short get_port() {
+        uint16_t get_port() {
             // Make sure the client is connected
             if (!connected) {
                 // TODO: throw error
@@ -509,8 +509,8 @@ namespace cppdtp {
         void send(T data) {
             send((void*)data, sizeof(data));
         }
-        }; // class Client
+    }; // class Client
 
-    } // namespace cppdtp
+} // namespace cppdtp
 
 #endif // CPPDTP_CLIENT_HPP
