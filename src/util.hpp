@@ -98,7 +98,7 @@
 #define CPPDTP_LENSIZE 5
 
 // Server max clients indicator
-#define CPPDTP_SERVER_MAX_CLIENTS_REACHED (-1)
+#define CPPDTP_SERVER_MAX_CLIENTS_REACHED UINT64_MAX
 
 namespace cppdtp {
 

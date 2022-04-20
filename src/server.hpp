@@ -29,6 +29,45 @@ namespace cppdtp {
         bool* allocated_clients = new bool[1];
         std::thread* serve_thread;
 
+        size_t next_client_id() {
+            if (num_clients >= max_clients) {
+                return CPPDTP_SERVER_MAX_CLIENTS_REACHED;
+            }
+
+            for (size_t i = 0; i < max_clients; i++) {
+                if (!allocated_clients[i]) {
+                    return i;
+                }
+            }
+
+            return CPPDTP_SERVER_MAX_CLIENTS_REACHED;
+        }
+
+#ifdef _WIN32
+        void send_status(SOCKET client_sock, int status_code)
+#else
+        void send_status(int client_sock, int status_code)
+#endif
+        {
+            std::string message = _construct_message(&status_code, sizeof(status_code));
+
+            if (::send(client_sock, &message[0], CPPDTP_LENSIZE + sizeof(status_code), 0) < 0) {
+                // TODO: throw error
+                // _cdtp_set_err(CPPDTP_STATUS_SEND_FAILED);
+            }
+        }
+
+        void disconnect_sock(size_t client_id) {
+#ifdef _WIN32
+            closesocket(clients[client_id].sock);
+#else
+            close(clients[client_id].sock);
+#endif
+
+            allocated_clients[client_id] = false;
+            num_clients--;
+        }
+
         void call_serve() {
             if (blocking) {
                 serve();
@@ -39,8 +78,224 @@ namespace cppdtp {
         }
 
         void serve() {
-            // TODO: serve
+            fd_set read_socks;
+            int activity;
+            struct sockaddr_in address;
+            int addrlen = sizeof(address);
+
+#ifdef _WIN32
+            SOCKET new_sock;
+            int max_sd = 0;
+#else
+            int new_sock;
+            int max_sd = sock.sock;
+#endif
+
+            unsigned char size_buffer[CPPDTP_LENSIZE];
+
+            while (serving) {
+                // Create the read sockets
+                FD_ZERO(&read_socks);
+                FD_SET(sock.sock, &read_socks);
+
+                for (size_t i = 0; i < max_clients; i++) {
+                    if (allocated_clients[i]) {
+                        FD_SET(clients[i].sock, &read_socks);
+
+#ifndef _WIN32
+                        if (clients[i].sock > max_sd) {
+                            max_sd = clients[i].sock;
+                        }
+#endif
+                    }
+                }
+
+                // Wait for activity
+                activity = select(max_sd + 1, &read_socks, NULL, NULL, NULL);
+
+                // Check if the server has been stopped
+                if (!serving) {
+                    return;
+                }
+
+                // Check for select errors
+                if (activity < 0) {
+                    // TODO: throw error
+                    // _cdtp_set_err(CPPDTP_SELECT_FAILED);
+                    // return;
+                }
+
+                // Check if something happened on the main socket
+                if (FD_ISSET(sock.sock, &read_socks)) {
+                    // Accept the new socket and check if an error has occurred
+#ifdef _WIN32
+                    new_sock = accept(sock.sock, (struct sockaddr*)&address, (int*)&addrlen);
+
+                    if (new_sock == INVALID_SOCKET) {
+                        int err_code = WSAGetLastError();
+
+                        if (err_code != WSAENOTSOCK || serving) {
+                            // TODO: throw error
+                            // _cdtp_set_error(CPPDTP_SOCKET_ACCEPT_FAILED, err_code);
+                        }
+
+                        return;
+                    }
+#else
+                    new_sock = accept(sock.sock, (struct sockaddr*)&address, (socklen_t*)&addrlen);
+
+                    if (new_sock < 0) {
+                        int err_code = errno;
+
+                        if (err_code != ENOTSOCK || serving) {
+                            // TODO: throw error
+                            // _cdtp_set_error(CPPDTP_SOCKET_ACCEPT_FAILED, err_code);
+                        }
+
+                        return;
+                    }
+#endif
+
+                    // Put new socket in the client list
+                    size_t new_client_id = next_client_id();
+
+                    if (new_client_id != CPPDTP_SERVER_MAX_CLIENTS_REACHED) {
+                        // Add the new socket to the client array
+                        clients[new_client_id].sock = new_sock;
+                        clients[new_client_id].address = address;
+                        allocated_clients[new_client_id] = true;
+                        num_clients++;
+                        send_status(new_sock, CPPDTP_SUCCESS);
+                        call_on_connect(new_client_id);
+                    }
+                    else {
+                        // Tell the client that the server is full
+                        send_status(new_sock, CPPDTP_SERVER_FULL);
+
+#ifdef _WIN32
+                        closesocket(new_sock);
+#else
+                        close(new_sock);
+#endif
+
+                    }
+                }
+
+                // Check if something happened on one of the client sockets
+                for (size_t i = 0; i < max_clients; i++) {
+                    if (allocated_clients[i] && FD_ISSET(clients[i].sock, &read_socks)) {
+#ifdef _WIN32
+                        int recv_code = recv(clients[i].sock, (char*)size_buffer, CPPDTP_LENSIZE, 0);
+
+                        if (recv_code == SOCKET_ERROR) {
+                            int err_code = WSAGetLastError();
+
+                            if (err_code == WSAECONNRESET) {
+                                disconnect_sock(i);
+                                call_on_disconnect(i);
+                            }
+                            else {
+                                // TODO: throw error
+                                // _cdtp_set_error(CPPDTP_SERVER_RECV_FAILED, err_code);
+                                // return;
+                            }
+                        }
+                        else if (recv_code == 0) {
+                            disconnect_sock(i);
+                            call_on_disconnect(i);
+                        }
+                        else {
+                            size_t msg_size = _decode_message_size(size_buffer);
+                            char* buffer = (char*)malloc(msg_size * sizeof(char));
+
+                            // Wait in case the message is sent in multiple chunks
+                            sleep(0.01);
+
+                            recv_code = recv(clients[i].sock, buffer, msg_size, 0);
+
+                            if (recv_code == SOCKET_ERROR) {
+                                int err_code = WSAGetLastError();
+
+                                if (err_code == WSAECONNRESET) {
+                                    disconnect_sock(i);
+                                    call_on_disconnect(i);
+                                }
+                                else {
+                                    // TODO: throw error
+                                    // _cdtp_set_error(CPPDTP_SERVER_RECV_FAILED, err_code);
+                                    // return;
+                                }
+                            }
+                            else if (recv_code == 0) {
+                                disconnect_sock(i);
+                                call_on_disconnect(i);
+                            }
+                            else {
+                                call_on_receive(i, (void*)buffer, msg_size);
+                            }
+                        }
+#else
+                        int recv_code = read(clients[i].sock, size_buffer, CPPDTP_LENSIZE);
+
+                        if (recv_code == 0) {
+                            disconnect_sock(i);
+                            call_on_disconnect(i);
+                        }
+                        else {
+                            size_t msg_size = _decode_message_size(size_buffer);
+                            char* buffer = (char*)malloc(msg_size * sizeof(char));
+
+                            // Wait in case the message is sent in multiple chunks
+                            sleep(0.01);
+
+                            recv_code = read(clients[i].sock, buffer, msg_size);
+
+                            if (recv_code == 0) {
+                                disconnect_sock(i);
+                                call_on_disconnect(i);
+                            }
+                            else {
+                                call_on_receive(i, (void*)buffer, msg_size);
+                            }
+                        }
+#endif
+                    }
+                }
+            }
         }
+
+        void call_on_receive(size_t client_id, void* data, size_t data_size) {
+            if (!event_blocking) {
+                receive(client_id, data, data_size);
+            }
+            else {
+                std::thread t(&cppdtp::Server::receive, this, client_id, data, data_size);
+            }
+        }
+
+        void call_on_connect(size_t client_id) {
+            if (!event_blocking) {
+                connect(client_id);
+            }
+            else {
+                std::thread t(&cppdtp::Server::connect, this, client_id);
+            }
+        }
+
+        void call_on_disconnect(size_t client_id) {
+            if (!event_blocking) {
+                disconnect(client_id);
+            }
+            else {
+                std::thread t(&cppdtp::Server::disconnect, this, client_id);
+            }
+        }
+
+        virtual void receive(size_t client_id, void* data, size_t data_size);
+
+        virtual void connect(size_t client_id);
+
+        virtual void disconnect(size_t client_id);
 
     public:
         Server(bool blocking_, bool event_blocking_, size_t max_clients_) {
@@ -146,7 +401,7 @@ namespace cppdtp {
             // Serve
             serving = true;
             call_serve();
-        }
+            }
 
         void start(std::string host) {
             start(host, CPPDTP_PORT);
@@ -201,7 +456,7 @@ namespace cppdtp {
                 // return;
             }
 
-            if (connect(client_sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+            if (::connect(client_sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
                 // TODO: throw error
                 // _cdtp_set_err(CPPDTP_SERVER_STOP_FAILED);
                 // return;
@@ -270,7 +525,7 @@ namespace cppdtp {
             free(addr);
 
             return addr_str;
-        }
+            }
 
         uint16_t get_port() {
             // Make sure the server is running
@@ -313,7 +568,7 @@ namespace cppdtp {
 #endif
 
             allocated_clients[client_id] = false;
-        }
+            }
 
         void send(size_t client_id, void* data, size_t data_size) {
             // Make sure the server is running
@@ -370,8 +625,8 @@ namespace cppdtp {
         void send_all(T data) {
             send_all((void*)data, sizeof(data));
         }
-    };
+        };
 
-} // namespace cppdtp
+        } // namespace cppdtp
 
 #endif // CPPDTP_SERVER_HPP
