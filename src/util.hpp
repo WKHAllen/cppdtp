@@ -125,7 +125,7 @@ namespace cppdtp {
     std::string _construct_message(T data, size_t data_size) {
         char* data_str = (char*)data;
         char* message = (char*)malloc((CPPDTP_LENSIZE + data_size) * sizeof(char));
-        unsigned char size[CPPDTP_LENSIZE] = _encode_message_size(data_size);
+        unsigned char* size = _encode_message_size(data_size);
 
         for (int i = 0; i < CPPDTP_LENSIZE; i++) {
             message[i] = size[i];

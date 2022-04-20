@@ -8,7 +8,7 @@ BUILD_FLAGS = \
 	-Wstrict-overflow=5 -Winline \
 	-Wundef -Wcast-qual -Wshadow -Wunreachable-code \
 	-Wlogical-op -Wfloat-equal -Wstrict-aliasing=2 -Wredundant-decls \
-	-Wno-pedantic-ms-format -Werror \
+	-Werror \
 	-g -O0 \
 	-fno-omit-frame-pointer -ffloat-store -fno-common
 
@@ -19,7 +19,7 @@ ifeq ($(OS),Windows_NT)
 	POST_BUILD_CMD = cd.
 	CLEAN_CMD = del bin\cppdtp bin\cppdtp.exe bin\test bin\test.exe bin\include\*.hpp
 else
-	LINK_FLAGS = -lpthread -lm
+	LINK_FLAGS = -lm
 	COPY_HEADERS = cp src/*.hpp bin/include/
 	TEST_BINARY = ./bin/test
 	POST_BUILD_CMD = chmod +x ./bin/test

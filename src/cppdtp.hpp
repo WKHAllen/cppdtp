@@ -11,7 +11,7 @@
 #define CPPDTP_HPP
 
 #include "util.hpp"
-#include "server.hpp"
 #include "client.hpp"
+#include "server.hpp"
 
 #endif // CPPDTP_HPP

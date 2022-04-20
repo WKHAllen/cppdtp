@@ -11,24 +11,185 @@
 #include "socket.hpp"
 
 #include <string>
+#include <thread>
 
 namespace cppdtp {
 
     class Client {
     private:
+        friend class Server;
+
         bool blocking = false;
         bool event_blocking = false;
         bool connected = false;
         _Socket sock;
-#ifdef _WIN32
-        HANDLE handle_thread;
-#else
-        pthread_t handle_thread;
+        std::thread* handle_thread;
+#ifndef _WIN32
         Server local_server;
 #endif
 
+        void call_handle() {
+            if (blocking) {
+                handle();
+            }
+            else {
+                handle_thread = new std::thread(&cppdtp::Client::handle, this);
+            }
+        }
+
+        void handle() {
+#ifdef _WIN32
+            unsigned char size_buffer[CPPDTP_LENSIZE];
+
+            while (connected) {
+                int recv_code = recv(sock.sock, (char*)size_buffer, CPPDTP_LENSIZE, 0);
+
+                // Check if the client has disconnected
+                if (!connected) {
+                    return;
+                }
+
+                if (recv_code == SOCKET_ERROR) {
+                    int err_code = WSAGetLastError();
+
+                    if (err_code == WSAECONNRESET) {
+                        disconnect();
+                        call_on_disconnected();
+                        return;
+                    }
+                    else {
+                        // TODO: throw error
+                        // _cdtp_set_error(CDTP_CLIENT_RECV_FAILED, err_code);
+                        // return;
+                    }
+                }
+                else if (recv_code == 0) {
+                    disconnect();
+                    call_on_disconnected();
+                    return;
+                }
+                else {
+                    size_t msg_size = _decode_message_size(size_buffer);
+                    char* buffer = (char*)malloc(msg_size * sizeof(char));
+
+                    // Wait in case the message is sent in multiple chunks
+                    sleep(0.01);
+
+                    recv_code = recv(sock.sock, buffer, msg_size, 0);
+
+                    if (recv_code == SOCKET_ERROR) {
+                        int err_code = WSAGetLastError();
+
+                        if (err_code == WSAECONNRESET) {
+                            disconnect();
+                            call_on_disconnected();
+                            return;
+                        }
+                        else {
+                            // TODO: throw error
+                            // _cdtp_set_error(CDTP_CLIENT_RECV_FAILED, err_code);
+                            // return;
+                        }
+                    }
+                    else if (recv_code == 0) {
+                        disconnect();
+                        call_on_disconnected();
+                        return;
+                    }
+                    else {
+                        call_on_receive((void*)buffer, msg_size);
+                    }
+                }
+            }
+#else
+            fd_set read_socks;
+            local_server.start(CPPDTP_LOCAL_SERVER_HOST, CPPDTP_LOCAL_SERVER_PORT);
+            int max_sd = sock.sock > local_server.sock.sock ? sock.sock : local_server.sock.sock;
+            int activity;
+            unsigned char size_buffer[CPPDTP_LENSIZE];
+
+            while (connected) {
+                // Set sockets for select
+                FD_ZERO(&read_socks);
+                FD_SET(sock.sock, &read_socks);
+                FD_SET(local_server.sock.sock, &read_socks);
+
+                // Wait for activity
+                activity = select(max_sd + 1, &read_socks, NULL, NULL, NULL);
+
+                // Check if the client has disconnected
+                if (!connected) {
+                    local_server.stop();
+                    return;
+                }
+
+                // Check for select errors
+                if (activity < 0) {
+                    // TODO: throw error
+                    // _cdtp_set_err(CDTP_SELECT_FAILED);
+                    // return;
+                }
+
+                // Wait in case the message is sent in multiple chunks
+                sleep(0.01);
+
+                int recv_code = read(sock.sock, size_buffer, CPPDTP_LENSIZE);
+
+                if (recv_code == 0) {
+                    disconnect();
+                    call_on_disconnected();
+                    return;
+                }
+                else {
+                    size_t msg_size = _decode_message_size(size_buffer);
+                    char* buffer = (char*)malloc(msg_size * sizeof(char));
+
+                    // Wait in case the message is sent in multiple chunks
+                    sleep(0.01);
+
+                    recv_code = read(sock.sock, buffer, msg_size);
+
+                    if (recv_code == 0) {
+                        disconnect();
+                        call_on_disconnected();
+                        return;
+                    }
+                    else {
+                        call_on_receive((void*)buffer, msg_size);
+                    }
+                }
+            }
+#endif
+        }
+
+        void call_on_receive(void* data, size_t data_size) {
+            if (!event_blocking) {
+                receive(data, data_size);
+            }
+            else {
+                std::thread t(&cppdtp::Client::receive, this, data, data_size);
+            }
+        }
+
+        void call_on_disconnected() {
+            if (!event_blocking) {
+                disconnected();
+            }
+            else {
+                std::thread t(&cppdtp::Client::disconnected, this);
+            }
+        }
+
+        virtual void receive(void* data, size_t data_size);
+
+        virtual void disconnected();
+
     public:
-        Client(bool blocking_, bool event_blocking_) {
+        Client(bool blocking_, bool event_blocking_)
+#ifndef _WIN32
+            : local_server(1)
+#endif
+        {
             blocking = blocking_;
             event_blocking = event_blocking_;
 
@@ -49,12 +210,19 @@ namespace cppdtp {
 #endif
         }
 
-        Client() {
+        Client()
+#ifndef _WIN32
+            : local_server(1)
+#endif
+        {
             Client(false, false);
         }
 
         ~Client() {
             // TODO: disconnect if still connected
+            // TODO: wait for threads to complete
+            // TODO: delete handle_thread if instantiated
+            // TODO: delete local_server if instantiated
         }
 
         void connect(std::string host, unsigned short port) {
@@ -104,10 +272,9 @@ namespace cppdtp {
                 int err_code = WSAGetLastError();
 
                 if (err_code == WSAECONNRESET) {
-                    // TODO: disconnect
-                    // cdtp_client_disconnect(client);
-                    // _cdtp_client_call_on_disconnected(client);
-                    // return;
+                    disconnect();
+                    call_on_disconnected();
+                    return;
                 }
                 else {
                     // TODO: throw error
@@ -116,10 +283,9 @@ namespace cppdtp {
                 }
             }
             else if (recv_code == 0) {
-                // TODO: disconnect
-                // cdtp_client_disconnect(client);
-                // _cdtp_client_call_on_disconnected(client);
-                // return;
+                disconnect();
+                call_on_disconnected();
+                return;
             }
             else {
                 size_t msg_size = _decode_message_size(size_buffer);
@@ -130,10 +296,9 @@ namespace cppdtp {
                     int err_code = WSAGetLastError();
 
                     if (err_code == WSAECONNRESET) {
-                        // TODO: disconnect
-                        // cdtp_client_disconnect(client);
-                        // _cdtp_client_call_on_disconnected(client);
-                        // return;
+                        disconnect();
+                        call_on_disconnected();
+                        return;
                     }
                     else {
                         // TODO: throw error
@@ -142,20 +307,19 @@ namespace cppdtp {
                     }
                 }
                 else if (recv_code == 0) {
-                    // TODO: disconnect
-                    // cdtp_client_disconnect(client);
-                    // _cdtp_client_call_on_disconnected(client);
-                    // return;
+                    disconnect();
+                    call_on_disconnected();
+                    return;
                 }
                 else {
                     int connect_code = *(int*)buffer;
 
                     if (connect_code == CPPDTP_SERVER_FULL) {
-                        // TODO: disconnect and throw error
+                        // TODO: throw error
                         // _cdtp_set_error(CPPDTP_SERVER_FULL, 0);
-                        // cdtp_client_disconnect(client);
-                        // _cdtp_client_call_on_disconnected(client);
-                        // return;
+                        disconnect();
+                        call_on_disconnected();
+                        return;
                     }
                 }
             }
@@ -163,10 +327,9 @@ namespace cppdtp {
             int recv_code = read(sock.sock, size_buffer, CPPDTP_LENSIZE);
 
             if (recv_code == 0) {
-                // TODO: disconnect
-                // cdtp_client_disconnect(client);
-                // _cdtp_client_call_on_disconnected(client);
-                // return;
+                disconnect();
+                call_on_disconnected();
+                return;
             }
             else {
                 size_t msg_size = _decode_message_size(size_buffer);
@@ -174,20 +337,19 @@ namespace cppdtp {
                 recv_code = read(sock.sock, buffer, msg_size);
 
                 if (recv_code == 0) {
-                    // TODO: disconnect
-                    // cdtp_client_disconnect(client);
-                    // _cdtp_client_call_on_disconnected(client);
-                    // return;
+                    disconnect();
+                    call_on_disconnected();
+                    return;
                 }
                 else {
                     int connect_code = *(int*)buffer;
 
                     if (connect_code == CPPDTP_SERVER_FULL) {
-                        // TODO: disconnect and throw error
+                        // TODO: throw error
                         // _cdtp_set_error(CPPDTP_SERVER_FULL, 0);
-                        // cdtp_client_disconnect(client);
-                        // _cdtp_client_call_on_disconnected(client);
-                        // return;
+                        disconnect();
+                        call_on_disconnected();
+                        return;
                     }
                 }
             }
@@ -195,8 +357,7 @@ namespace cppdtp {
 
             // Handle received data
             connected = true;
-            // TODO: call connection handle method
-            // _cdtp_client_call_handle(client);
+            call_handle();
         }
 
         void connect(std::string host) {
@@ -215,13 +376,6 @@ namespace cppdtp {
             if (closesocket(sock.sock) != 0) {
                 // TODO: throw error
                 // _cdtp_set_err(CPPDTP_CLIENT_DISCONNECT_FAILED);
-                // return;
-            }
-
-            // Wait for threads to exit
-            if (!blocking && WaitForSingleObject(handle_thread, INFINITE) == WAIT_FAILED) {
-                // TODO: throw error
-                // _cdtp_set_error(CPPDTP_HANDLE_THREAD_NOT_CLOSING, GetLastError());
                 // return;
             }
 #else
@@ -267,18 +421,12 @@ namespace cppdtp {
                 // _cdtp_set_err(CPPDTP_CLIENT_DISCONNECT_FAILED);
                 // return;
             }
+#endif
 
             // Wait for threads to exit
             if (!blocking) {
-                int err_code = pthread_join(handle_thread, NULL);
-
-                if (err_code != 0) {
-                    // TODO: throw error
-                    // _cdtp_set_error(CPPDTP_HANDLE_THREAD_NOT_CLOSING, err_code);
-                    // return;
-                }
+                handle_thread->join();
             }
-#endif
         }
 
         bool is_connected() {
@@ -316,14 +464,14 @@ namespace cppdtp {
                 // TODO: throw error
                 // _cdtp_set_err(CPPDTP_CLIENT_ADDRESS_FAILED);
                 // return NULL;
-            }
+                }
 #endif
 
             std::string addr_str(addr);
             free(addr);
 
             return addr_str;
-        }
+            }
 
         unsigned short get_port() {
             // Make sure the client is connected
@@ -336,8 +484,7 @@ namespace cppdtp {
             return ntohs(sock.address.sin_port);
         }
 
-        template <typename T>
-        void send(T data, size_t data_size) {
+        void send(void* data, size_t data_size) {
             // Make sure the client is connected
             if (!connected) {
                 // TODO: throw error
@@ -354,11 +501,16 @@ namespace cppdtp {
         }
 
         template <typename T>
-        void send(T data) {
-            send(data, sizeof(data));
+        void send(T data, size_t data_size) {
+            send((void*)data, data_size);
         }
-    }; // class Client
 
-} // namespace cppdtp
+        template <typename T>
+        void send(T data) {
+            send((void*)data, sizeof(data));
+        }
+        }; // class Client
+
+    } // namespace cppdtp
 
 #endif // CPPDTP_CLIENT_HPP
