@@ -309,6 +309,17 @@ namespace cppdtp {
             clients = new _Socket[max_clients];
             allocated_clients = new bool[max_clients] {false};
 
+            // Initialize the library
+            if (!cppdtp_init) {
+                int return_code = _cppdtp_init();
+
+                if (return_code != 0) {
+                    // TODO: throw error
+                    // _cdtp_set_error(CPPDTP_WINSOCK_INIT_FAILED, return_code);
+                    // return NULL;
+                }
+            }
+
             // Initialize the socket info
             int opt = 1;
 
@@ -401,7 +412,7 @@ namespace cppdtp {
             // Serve
             serving = true;
             call_serve();
-            }
+        }
 
         void start(std::string host) {
             start(host, CPPDTP_PORT);
@@ -481,7 +492,7 @@ namespace cppdtp {
                 serve_thread->join();
                 delete serve_thread;
             }
-        }
+                    }
 
         bool is_serving() {
             return serving;
@@ -525,7 +536,7 @@ namespace cppdtp {
             free(addr);
 
             return addr_str;
-            }
+        }
 
         uint16_t get_port() {
             // Make sure the server is running
@@ -625,8 +636,8 @@ namespace cppdtp {
         void send_all(T data) {
             send_all((void*)data, sizeof(data));
         }
-        };
+        }; // class Server
 
-        } // namespace cppdtp
+                } // namespace cppdtp
 
 #endif // CPPDTP_SERVER_HPP

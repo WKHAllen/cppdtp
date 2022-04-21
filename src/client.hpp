@@ -193,6 +193,17 @@ namespace cppdtp {
             blocking = blocking_;
             event_blocking = event_blocking_;
 
+            // Initialize the library
+            if (!cppdtp_init) {
+                int return_code = _cppdtp_init();
+
+                if (return_code != 0) {
+                    // TODO: throw error
+                    // _cdtp_set_error(CPPDTP_WINSOCK_INIT_FAILED, return_code);
+                    // return NULL;
+                }
+            }
+
 #ifdef _WIN32
             // Initialize the socket
             if ((sock.sock = socket(CPPDTP_ADDRESS_FAMILY, SOCK_STREAM, 0)) == INVALID_SOCKET) {

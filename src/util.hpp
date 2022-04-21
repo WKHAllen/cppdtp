@@ -102,6 +102,37 @@
 
 namespace cppdtp {
 
+    static bool cppdtp_init = false;
+    static bool cppdtp_exit = false;
+
+    void _cppdtp_exit() {
+        if (!cppdtp_exit) {
+            cppdtp_exit = true;
+
+#ifdef _WIN32
+            WSACleanup();
+#endif
+
+        }
+    }
+
+    int _cppdtp_init() {
+        if (!cppdtp_init) {
+            cppdtp_init = true;
+            std::atexit(_cppdtp_exit);
+
+#ifdef _WIN32
+            WSADATA wsa;
+            return WSAStartup(MAKEWORD(2, 2), &wsa);
+#else
+            return 0;
+#endif
+
+        }
+
+        return 0;
+    }
+
     unsigned char* _encode_message_size(size_t size) {
         unsigned char* encoded_size = new unsigned char[CPPDTP_LENSIZE];
 
