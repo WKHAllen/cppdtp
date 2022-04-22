@@ -1,4 +1,4 @@
-﻿/*
+﻿/**
  * C++ Data Transfer Protocol
  *
  * A cross platform networking library written in C++.
@@ -11,6 +11,7 @@
 #define CPPDTP_HPP
 
 #include "util.hpp"
+#include "exceptions.hpp"
 #include "client.hpp"
 #include "server.hpp"
 

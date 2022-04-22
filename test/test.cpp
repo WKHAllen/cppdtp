@@ -1,3 +1,7 @@
+/**
+ * Tests for cppdtp.
+ */
+
 #include "../bin/include/cppdtp.hpp"
 
 #include <iostream>

@@ -1,4 +1,4 @@
-/*
+/**
  * Utility functions and definitions for cppdtp.
  */
 
