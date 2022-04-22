@@ -10,12 +10,16 @@
 
 namespace cppdtp {
 
+    // Socket type, containing the socket itself and the address
     struct _Socket {
 #ifdef _WIN32
+        // Windows socket
         SOCKET sock;
 #else
+        // Non-Windows socket
         int sock;
 #endif
+        // Socket address
         struct sockaddr_in address;
     }; // struct _Socket
 

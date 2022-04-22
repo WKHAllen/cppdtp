@@ -102,12 +102,12 @@
 
 namespace cppdtp {
 
-    static bool cppdtp_init = false;
-    static bool cppdtp_exit = false;
+    static bool _cppdtp_init_status = false;
+    static bool _cppdtp_exit_status = false;
 
     void _cppdtp_exit() {
-        if (!cppdtp_exit) {
-            cppdtp_exit = true;
+        if (!_cppdtp_exit_status) {
+            _cppdtp_exit_status = true;
 
 #ifdef _WIN32
             WSACleanup();
@@ -117,8 +117,8 @@ namespace cppdtp {
     }
 
     int _cppdtp_init() {
-        if (!cppdtp_init) {
-            cppdtp_init = true;
+        if (!_cppdtp_init_status) {
+            _cppdtp_init_status = true;
             std::atexit(_cppdtp_exit);
 
 #ifdef _WIN32

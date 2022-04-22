@@ -15,19 +15,34 @@
 
 namespace cppdtp {
 
+    // A socket client
     class Client {
     private:
         friend class Server;
 
+        // If the client will block while connected to a server.
         bool blocking = false;
+
+        // If the client will block when calling event methods.
         bool event_blocking = false;
+
+        // If the client is currently connected.
         bool connected = false;
+
+        // The client socket.
         _Socket sock;
+
+        // The thread from which the client will await messages from the server.
         std::thread* handle_thread;
+
 #ifndef _WIN32
+        // A local socket server, used for disconnecting the socket.
         Server local_server;
 #endif
 
+        /**
+         * Call the handle method.
+         */
         void call_handle() {
             if (blocking) {
                 handle();
@@ -37,6 +52,9 @@ namespace cppdtp {
             }
         }
 
+        /**
+         * Handle messages from the server.
+         */
         void handle() {
 #ifdef _WIN32
             unsigned char size_buffer[CPPDTP_LENSIZE];
@@ -162,6 +180,9 @@ namespace cppdtp {
 #endif
         }
 
+        /**
+         * Call the receive event method.
+         */
         void call_on_receive(void* data, size_t data_size) {
             if (!event_blocking) {
                 receive(data, data_size);
@@ -171,6 +192,9 @@ namespace cppdtp {
             }
         }
 
+        /**
+         * Call the disconnect event method.
+         */
         void call_on_disconnected() {
             if (!event_blocking) {
                 disconnected();
@@ -180,11 +204,28 @@ namespace cppdtp {
             }
         }
 
+        /**
+         * An event method, called when a message is received from the server.
+         *
+         * data:      The data received from the server.
+         * data_size: The size of the data received, in bytes.
+         */
         virtual void receive(void* data, size_t data_size);
 
+        /**
+         * An event method, called when the server has disconnected the client.
+         */
         virtual void disconnected();
 
     public:
+        /**
+         * Instantiate a socket client.
+         *
+         * blocking_:       If the client should block while connected to a server.
+         * event_blocking_: If the client should block when calling event methods.
+         *
+         * Returns: The socket client.
+         */
         Client(bool blocking_, bool event_blocking_)
 #ifndef _WIN32
             : local_server(1)
@@ -194,7 +235,7 @@ namespace cppdtp {
             event_blocking = event_blocking_;
 
             // Initialize the library
-            if (!cppdtp_init) {
+            if (!_cppdtp_init_status) {
                 int return_code = _cppdtp_init();
 
                 if (return_code != 0) {
@@ -221,6 +262,11 @@ namespace cppdtp {
 #endif
         }
 
+        /**
+         * Instantiate a socket client.
+         *
+         * Returns: The socket client.
+         */
         Client()
 #ifndef _WIN32
             : local_server(1)
@@ -229,12 +275,21 @@ namespace cppdtp {
             Client(false, false);
         }
 
+        /**
+         * Drop the socket client.
+         */
         ~Client() {
             if (connected) {
                 disconnect();
             }
         }
 
+        /**
+         * Connect to a server.
+         *
+         * host: The server host.
+         * port: The server port.
+         */
         void connect(std::string host, uint16_t port) {
             // Change 'localhost' to '127.0.0.1'
             if (host == "localhost") {
@@ -370,16 +425,34 @@ namespace cppdtp {
             call_handle();
         }
 
+        /**
+         * Connect to a server, using the default port.
+         *
+         * host: The server host.
+         */
         void connect(std::string host) {
             connect(host, CPPDTP_PORT);
         }
 
+        /**
+         * Connect to a server, using the default host and port.
+         */
         void connect() {
             connect(INADDR_ANY, CPPDTP_PORT);
         }
 
+        /**
+         * Disconnect from the server.
+         */
         void disconnect() {
             connected = false;
+
+            // Make sure the client is connected
+            if (!connected) {
+                // TODO: throw error
+                // _cdtp_set_error(CPPDTP_CLIENT_NOT_CONNECTED, 0);
+                // return;
+            }
 
 #ifdef _WIN32
             // Close the socket
@@ -440,10 +513,20 @@ namespace cppdtp {
             }
         }
 
+        /**
+         * Check if the client is connected to a server.
+         *
+         * Returns: If the client is connected to a server.
+         */
         bool is_connected() {
             return connected;
         }
 
+        /**
+         * Get the host address of the server the client is connected to.
+         *
+         * Returns: The host address of the server.
+         */
         std::string get_host() {
             // Make sure the client is connected
             if (!connected) {
@@ -484,6 +567,11 @@ namespace cppdtp {
             return addr_str;
         }
 
+        /**
+         * Get the port of the server the client is connected to.
+         *
+         * Returns: The port of the server.
+         */
         uint16_t get_port() {
             // Make sure the client is connected
             if (!connected) {
@@ -495,6 +583,12 @@ namespace cppdtp {
             return ntohs(sock.address.sin_port);
         }
 
+        /**
+         * Send data to the server.
+         *
+         * data:      The data to send.
+         * data_size: The size of the data being sent, in bytes.
+         */
         void send(void* data, size_t data_size) {
             // Make sure the client is connected
             if (!connected) {
@@ -511,11 +605,22 @@ namespace cppdtp {
             }
         }
 
+        /**
+         * Send data to the server.
+         *
+         * data:      The data to send.
+         * data_size: The size of the data being sent, in bytes.
+         */
         template <typename T>
         void send(T data, size_t data_size) {
             send((void*)data, data_size);
         }
 
+        /**
+         * Send data to the server.
+         *
+         * data: The data to send.
+         */
         template <typename T>
         void send(T data) {
             send((void*)data, sizeof(data));
