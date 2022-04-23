@@ -112,8 +112,6 @@ int main() {
     uint16_t port = server.get_port();
     cout << "IP address: " << ip_address << endl;
     cout << "Port:       " << port << endl;
-    assert(ip_address == host);
-    assert(port == CPPDTP_PORT);
 
     // Test that the client does not exist
     try {
