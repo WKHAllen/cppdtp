@@ -19,7 +19,7 @@ ifeq ($(OS),Windows_NT)
 	POST_BUILD_CMD = cd.
 	CLEAN_CMD = del bin\cppdtp bin\cppdtp.exe bin\test bin\test.exe bin\include\*.hpp
 else
-	LINK_FLAGS = -lm
+	LINK_FLAGS = -lpthread -lm
 	COPY_HEADERS = cp src/*.hpp bin/include/
 	TEST_BINARY = ./bin/test
 	POST_BUILD_CMD = chmod +x ./bin/test

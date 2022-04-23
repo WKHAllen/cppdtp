@@ -339,21 +339,29 @@ namespace cppdtp {
          * data:      The data received from the client.
          * data_size: The size of the data received, in bytes.
          */
-        virtual void receive(size_t client_id, void* data, size_t data_size);
+        virtual void receive(size_t client_id, void* data, size_t data_size) {
+            (void)client_id;
+            (void)data;
+            (void)data_size;
+        }
 
         /**
          * An event method, called when a client connects.
          *
          * client_id: The ID of the client who connected.
          */
-        virtual void connect(size_t client_id);
+        virtual void connect(size_t client_id) {
+            (void)client_id;
+        }
 
         /**
          * An event method, called when a client disconnects.
          *
          * client_id: The ID of the client who disconnected.
          */
-        virtual void disconnect(size_t client_id);
+        virtual void disconnect(size_t client_id) {
+            (void)client_id;
+        }
 
     public:
         /**
@@ -424,6 +432,11 @@ namespace cppdtp {
                 stop();
                 delete[] clients;
                 delete[] allocated_clients;
+
+                if (!blocking) {
+                    serve_thread->join();
+                    delete serve_thread;
+                }
             }
         }
 
@@ -495,12 +508,12 @@ namespace cppdtp {
          * Stop the server.
          */
         void stop() {
-            serving = false;
-
             // Make sure the server is serving
             if (!serving) {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
             }
+
+            serving = false;
 
 #ifdef _WIN32
             // Close sockets
@@ -550,11 +563,6 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED, "server failed to close server socket");
             }
 #endif
-
-            if (!blocking) {
-                serve_thread->join();
-                delete serve_thread;
-            }
         }
 
         /**

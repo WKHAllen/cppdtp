@@ -205,12 +205,15 @@ namespace cppdtp {
          * data:      The data received from the server.
          * data_size: The size of the data received, in bytes.
          */
-        virtual void receive(void* data, size_t data_size);
+        virtual void receive(void* data, size_t data_size) {
+            (void)data;
+            (void)data_size;
+        }
 
         /**
          * An event method, called when the server has disconnected the client.
          */
-        virtual void disconnected();
+        virtual void disconnected() {}
 
     public:
         /**
@@ -264,6 +267,11 @@ namespace cppdtp {
         ~Client() {
             if (connected) {
                 disconnect();
+
+                if (!blocking) {
+                    handle_thread->join();
+                    delete handle_thread;
+                }
             }
         }
 
@@ -412,12 +420,12 @@ namespace cppdtp {
          * Disconnect from the server.
          */
         void disconnect() {
-            connected = false;
-
             // Make sure the client is connected
             if (!connected) {
                 throw CPPDTPException(CPPDTP_CLIENT_NOT_CONNECTED, 0, "client is not connected to a server");
             }
+
+            connected = false;
 
 #ifdef _WIN32
             // Close the socket
@@ -458,12 +466,6 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_CLIENT_DISCONNECT_FAILED, "client failed to disconnect from local server while disconnecting");
             }
 #endif
-
-            // Wait for threads to exit
-            if (!blocking) {
-                handle_thread->join();
-                delete handle_thread;
-            }
         }
 
         /**
