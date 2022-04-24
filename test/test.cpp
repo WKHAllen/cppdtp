@@ -143,7 +143,9 @@ int main() {
 
     // Client send
     string client_message = "Hello, server.";
+    cout << "0" << endl;
     client.send((void*)(&client_message[0]), client_message.size() + 1);
+    cout << "1" << endl;
 
     cppdtp::sleep(wait_time);
 

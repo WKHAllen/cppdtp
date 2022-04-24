@@ -79,11 +79,13 @@ namespace cppdtp {
         void send_status(int client_sock, int status_code)
 #endif
         {
-            std::string message = _construct_message(&status_code, sizeof(status_code));
+            char* message = _construct_message(&status_code, sizeof(status_code));
 
             if (::send(client_sock, &message[0], CPPDTP_LENSIZE + sizeof(status_code), 0) < 0) {
                 throw CPPDTPException(CPPDTP_STATUS_SEND_FAILED, "failed to send status code to client");
             }
+
+            free(message);
         }
 
         /**
@@ -669,11 +671,13 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
             }
 
-            std::string message = _construct_message(data, data_size);
+            char* message = _construct_message(data, data_size);
 
             if (::send(clients[client_id].sock, &message[0], CPPDTP_LENSIZE + data_size, 0) < 0) {
                 throw CPPDTPException(CPPDTP_SERVER_SEND_FAILED, "failed to send data to client");
             }
+
+            free(message);
         }
 
         /**
@@ -711,7 +715,7 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
             }
 
-            std::string message = _construct_message(data, data_size);
+            char* message = _construct_message(data, data_size);
 
             for (size_t i = 0; i < max_clients; i++) {
                 if (allocated_clients[i]) {
@@ -720,6 +724,8 @@ namespace cppdtp {
                     }
                 }
             }
+
+            free(message);
         }
 
         /**

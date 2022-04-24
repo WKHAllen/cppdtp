@@ -542,11 +542,13 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_CLIENT_NOT_CONNECTED, 0, "client is not connected to a server");
             }
 
-            std::string message = _construct_message(data, data_size);
+            char* message = _construct_message(data, data_size);
 
             if (::send(sock.sock, &message[0], CPPDTP_LENSIZE + data_size, 0) < 0) {
                 throw CPPDTPException(CPPDTP_CLIENT_SEND_FAILED, "failed to send data to server");
             }
+
+            free(message);
         }
 
         /**

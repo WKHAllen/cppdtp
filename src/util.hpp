@@ -156,7 +156,7 @@ namespace cppdtp {
     }
 
     template <typename T>
-    std::string _construct_message(T data, size_t data_size) {
+    char* _construct_message(T data, size_t data_size) {
         char* data_str = (char*)data;
         char* message = (char*)malloc((CPPDTP_LENSIZE + data_size) * sizeof(char));
         unsigned char* size = _encode_message_size(data_size);
@@ -169,12 +169,7 @@ namespace cppdtp {
             message[i + CPPDTP_LENSIZE] = data_str[i];
         }
 
-        std::string message_str(message);
-
-        delete[] size;
-        free(message);
-
-        return message_str;
+        return message;
     }
 
     template <typename T>
