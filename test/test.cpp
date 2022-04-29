@@ -95,7 +95,7 @@ int main() {
     size_t random_message_to_client_len = randint(65536, 82175); // fails on Linux at values >= 82176?
     char* random_message_to_server = randbytes(random_message_to_server_len);
     char* random_message_to_client = randbytes(random_message_to_client_len);
-    cout << "Large random message sizes: " << random_message_to_server_len << "," << random_message_to_client_len << endl;
+    cout << "Large random message sizes: " << random_message_to_server_len << ", " << random_message_to_client_len << endl;
 
     // Begin testing
     cout << "Running tests..." << endl;
@@ -143,9 +143,7 @@ int main() {
 
     // Client send
     string client_message = "Hello, server.";
-    cout << "0" << endl;
     client.send((void*)(&client_message[0]), client_message.size() + 1);
-    cout << "1" << endl;
 
     cppdtp::sleep(wait_time);
 
