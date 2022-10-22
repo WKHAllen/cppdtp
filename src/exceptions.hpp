@@ -77,7 +77,7 @@ namespace cppdtp {
          *
          * Returns: The exception message.
          */
-        const char* what() const throw() {
+        const char *what() const throw() {
             return message.c_str();
         }
     }; // class CPPDTPException

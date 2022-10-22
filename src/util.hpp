@@ -13,15 +13,17 @@
 #  include <Windows.h>
 #  include <WS2tcpip.h>
 #else
+
 #  include <unistd.h>
 #  include <sys/socket.h>
 #  include <netinet/in.h>
 #  include <arpa/inet.h>
 #  include <errno.h>
 #  include <time.h>
+
 #endif
 
- // CPPDTP error codes
+// CPPDTP error codes
 #define CPPDTP_SUCCESS                     0
 #define CPPDTP_WINSOCK_INIT_FAILED         1
 #define CPPDTP_SERVER_SOCK_INIT_FAILED     2
@@ -56,7 +58,7 @@
 #define CPPDTP_CLIENT_SEND_FAILED         31
 #define CPPDTP_CLIENT_RECV_FAILED         32
 
- // Global address family to use
+// Global address family to use
 #ifndef CPPDTP_ADDRESS_FAMILY
 #  define CPPDTP_ADDRESS_FAMILY AF_INET
 #endif
@@ -71,6 +73,9 @@
 #elif (CPPDTP_ADDRESS_FAMILY == AF_INET6)
 #  define CPPDTP_ADDRSTRLEN CPPDTP_INET6_ADDRSTRLEN
 #endif
+
+// Default CPPDTP host address
+#define CPPDTP_HOST INADDR_ANY
 
 // Default CPPDTP port
 #ifndef CPPDTP_PORT
@@ -91,7 +96,7 @@
 
 // Default CPPDTP server listen backlog
 #ifndef CPPDTP_SERVER_LISTEN_BACKLOG
-#  define CPPDTP_SERVER_LISTEN_BACKLOG 3
+#  define CPPDTP_SERVER_LISTEN_BACKLOG 8
 #endif
 
 // Length of the size portion of each message
@@ -133,8 +138,8 @@ namespace cppdtp {
         return 0;
     }
 
-    unsigned char* _encode_message_size(size_t size) {
-        unsigned char* encoded_size = new unsigned char[CPPDTP_LENSIZE];
+    unsigned char *_encode_message_size(size_t size) {
+        unsigned char *encoded_size = new unsigned char[CPPDTP_LENSIZE];
 
         for (int i = CPPDTP_LENSIZE - 1; i >= 0; i--) {
             encoded_size[i] = size % 256;
@@ -155,11 +160,11 @@ namespace cppdtp {
         return size;
     }
 
-    template <typename T>
-    char* _construct_message(T data, size_t data_size) {
-        char* data_str = (char*)data;
-        char* message = (char*)malloc((CPPDTP_LENSIZE + data_size) * sizeof(char));
-        unsigned char* size = _encode_message_size(data_size);
+    template<typename T>
+    char *_construct_message(T data, size_t data_size) {
+        char *data_str = (char *) data;
+        char *message = (char *) malloc((CPPDTP_LENSIZE + data_size) * sizeof(char));
+        unsigned char *size = _encode_message_size(data_size);
 
         for (int i = 0; i < CPPDTP_LENSIZE; i++) {
             message[i] = size[i];
@@ -172,17 +177,17 @@ namespace cppdtp {
         return message;
     }
 
-    template <typename T>
+    template<typename T>
     T _deconstruct_message(std::string message) {
         // only the first CPPDTP_LENSIZE bytes of message will be read as the size
-        size_t data_size = _decode_message_size((unsigned char*)(&message[0]));
-        char* data = (char*)malloc(data_size * sizeof(char));
+        size_t data_size = _decode_message_size((unsigned char *) (&message[0]));
+        char *data = (char *) malloc(data_size * sizeof(char));
 
         for (size_t i = 0; i < data_size; i++) {
             data[i] = message[i + CPPDTP_LENSIZE];
         }
 
-        return (T)data;
+        return (T) data;
     }
 
     void sleep(double seconds) {
@@ -191,7 +196,7 @@ namespace cppdtp {
 #else
         struct timespec ts;
         ts.tv_sec = seconds;
-        ts.tv_nsec = ((int)(seconds * 1000) % 1000) * 1000000;
+        ts.tv_nsec = ((int) (seconds * 1000) % 1000) * 1000000;
         nanosleep(&ts, NULL);
 #endif
     }

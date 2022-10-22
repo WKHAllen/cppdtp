@@ -21,12 +21,6 @@ namespace cppdtp {
     private:
         friend class Client;
 
-        // If the server will block while serving clients.
-        bool blocking = false;
-
-        // If the server will block while calling event methods.
-        bool event_blocking = false;
-
         // If the server is currently serving.
         bool serving = false;
 
@@ -40,18 +34,18 @@ namespace cppdtp {
         _Socket sock;
 
         // The client sockets.
-        _Socket* clients = new _Socket[1];
+        _Socket *clients = new _Socket[1];
 
         // An array noting the client slots that are being used.
-        bool* allocated_clients = new bool[1];
+        bool *allocated_clients = new bool[1];
 
         // The thread from which the server will serve clients.
-        std::thread* serve_thread;
+        std::thread *serve_thread;
 
         /**
          * Get a new client ID.
          *
-         * Returns: The next available client ID.
+         * @return The next available client ID.
          */
         size_t next_client_id() {
             if (num_clients >= max_clients) {
@@ -70,16 +64,17 @@ namespace cppdtp {
         /**
          * Send a status message to a client.
          *
-         * client_sock: The socket of the client to send the status to.
-         * status_code: The status code to send.
+         * @param client_sock The socket of the client to send the status to.
+         * @param status_code The status code to send.
          */
 #ifdef _WIN32
         void send_status(SOCKET client_sock, int status_code)
 #else
+
         void send_status(int client_sock, int status_code)
 #endif
         {
-            char* message = _construct_message(&status_code, sizeof(status_code));
+            char *message = _construct_message(&status_code, sizeof(status_code));
 
             if (::send(client_sock, &message[0], CPPDTP_LENSIZE + sizeof(status_code), 0) < 0) {
                 throw CPPDTPException(CPPDTP_STATUS_SEND_FAILED, "failed to send status code to client");
@@ -91,7 +86,7 @@ namespace cppdtp {
         /**
          * Disconnect a client from the server.
          *
-         * client_id: The ID of the client to disconnect.
+         * @param client_id The ID of the client to disconnect.
          */
         void disconnect_sock(size_t client_id) {
 #ifdef _WIN32
@@ -108,12 +103,7 @@ namespace cppdtp {
          * Call the serve method.
          */
         void call_serve() {
-            if (blocking) {
-                serve();
-            }
-            else {
-                serve_thread = new std::thread(&cppdtp::Server::serve, this);
-            }
+            serve_thread = new std::thread(&cppdtp::Server::serve, this);
         }
 
         /**
@@ -181,13 +171,14 @@ namespace cppdtp {
                         return;
                     }
 #else
-                    new_sock = accept(sock.sock, (struct sockaddr*)&address, (socklen_t*)&addrlen);
+                    new_sock = accept(sock.sock, (struct sockaddr *) &address, (socklen_t * ) & addrlen);
 
                     if (new_sock < 0) {
                         int err_code = errno;
 
                         if (err_code != ENOTSOCK || serving) {
-                            throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, err_code, "failed to accept client socket");
+                            throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, err_code,
+                                                  "failed to accept client socket");
                         }
 
                         return;
@@ -205,8 +196,7 @@ namespace cppdtp {
                         num_clients++;
                         send_status(new_sock, CPPDTP_SUCCESS);
                         call_on_connect(new_client_id);
-                    }
-                    else {
+                    } else {
                         // Tell the client that the server is full
                         send_status(new_sock, CPPDTP_SERVER_FULL);
 
@@ -274,10 +264,9 @@ namespace cppdtp {
                         if (recv_code == 0) {
                             disconnect_sock(i);
                             call_on_disconnect(i);
-                        }
-                        else {
+                        } else {
                             size_t msg_size = _decode_message_size(size_buffer);
-                            char* buffer = (char*)malloc(msg_size * sizeof(char));
+                            char *buffer = (char *) malloc(msg_size * sizeof(char));
 
                             // Wait in case the message is sent in multiple chunks
                             sleep(0.01);
@@ -287,9 +276,8 @@ namespace cppdtp {
                             if (recv_code == 0) {
                                 disconnect_sock(i);
                                 call_on_disconnect(i);
-                            }
-                            else {
-                                call_on_receive(i, (void*)buffer, msg_size);
+                            } else {
+                                call_on_receive(i, (void *) buffer, msg_size);
                             }
                         }
 #endif
@@ -301,90 +289,69 @@ namespace cppdtp {
         /**
          * Call the receive event method.
          */
-        void call_on_receive(size_t client_id, void* data, size_t data_size) {
-            if (!event_blocking) {
-                receive(client_id, data, data_size);
-            }
-            else {
-                std::thread t(&cppdtp::Server::receive, this, client_id, data, data_size);
-            }
+        void call_on_receive(size_t client_id, void *data, size_t data_size) {
+            std::thread t(&cppdtp::Server::receive, this, client_id, data, data_size);
         }
 
         /**
          * Call the connect event method.
          */
         void call_on_connect(size_t client_id) {
-            if (!event_blocking) {
-                connect(client_id);
-            }
-            else {
-                std::thread t(&cppdtp::Server::connect, this, client_id);
-            }
+            std::thread t(&cppdtp::Server::connect, this, client_id);
         }
 
         /**
          * Call the disconnect event method.
          */
         void call_on_disconnect(size_t client_id) {
-            if (!event_blocking) {
-                disconnect(client_id);
-            }
-            else {
-                std::thread t(&cppdtp::Server::disconnect, this, client_id);
-            }
+            std::thread t(&cppdtp::Server::disconnect, this, client_id);
         }
 
         /**
          * An event method, called when a message is received from a client.
          *
-         * client_id: The ID of the client who sent the message.
-         * data:      The data received from the client.
-         * data_size: The size of the data received, in bytes.
+         * @param client_id The ID of the client who sent the message.
+         * @param data The data received from the client.
+         * @param data_size The size of the data received, in bytes.
          */
-        virtual void receive(size_t client_id, void* data, size_t data_size) {
-            (void)client_id;
-            (void)data;
-            (void)data_size;
+        virtual void receive(size_t client_id, void *data, size_t data_size) {
+            (void) client_id;
+            (void) data;
+            (void) data_size;
         }
 
         /**
          * An event method, called when a client connects.
          *
-         * client_id: The ID of the client who connected.
+         * @param client_id The ID of the client who connected.
          */
         virtual void connect(size_t client_id) {
-            (void)client_id;
+            (void) client_id;
         }
 
         /**
          * An event method, called when a client disconnects.
          *
-         * client_id: The ID of the client who disconnected.
+         * @param client_id The ID of the client who disconnected.
          */
         virtual void disconnect(size_t client_id) {
-            (void)client_id;
+            (void) client_id;
         }
 
     public:
         /**
          * Instantiate a socket server.
          *
-         * blocking_:       If the server should block while serving clients.
-         * event_blocking_: If the server should block when calling event methods.
-         * max_clients_:    The maximum number of clients the server can serve at once.
-         *
-         * Returns: The socket server.
+         * @param max_clients_ The maximum number of clients the server can serve at once.
          */
-        Server(bool blocking_, bool event_blocking_, size_t max_clients_) {
-            blocking = blocking_;
-            event_blocking = event_blocking_;
+        Server(size_t max_clients_) {
             max_clients = max_clients_;
 
             delete[] clients;
             delete[] allocated_clients;
 
             clients = new _Socket[max_clients];
-            allocated_clients = new bool[max_clients] {false};
+            allocated_clients = new bool[max_clients]{false};
 
             // Initialize the library
             if (!_cppdtp_init_status) {
@@ -418,15 +385,6 @@ namespace cppdtp {
         }
 
         /**
-         * Instantiate a socket server.
-         *
-         * max_clients_: The maximum number of clients the server can serve at once.
-         *
-         * Returns: The socket server.
-         */
-        Server(size_t max_clients_) : Server(false, false, max_clients_) {}
-
-        /**
          * Drop the socket server.
          */
         ~Server() {
@@ -435,18 +393,16 @@ namespace cppdtp {
                 delete[] clients;
                 delete[] allocated_clients;
 
-                if (!blocking) {
-                    serve_thread->join();
-                    delete serve_thread;
-                }
+                serve_thread->join();
+                delete serve_thread;
             }
         }
 
         /**
          * Start the socket server.
          *
-         * host: The address to host the server on.
-         * port: The port to host the server on.
+         * @param host The address to host the server on.
+         * @param port The port to host the server on.
          */
         void start(std::string host, uint16_t port) {
             // Change 'localhost' to '127.0.0.1'
@@ -476,7 +432,7 @@ namespace cppdtp {
             sock.address.sin_port = htons(port);
 
             // Bind the address to the server
-            if (bind(sock.sock, (struct sockaddr*)&(sock.address), sizeof(sock.address)) < 0) {
+            if (bind(sock.sock, (struct sockaddr *) &(sock.address), sizeof(sock.address)) < 0) {
                 throw CPPDTPException(CPPDTP_SERVER_BIND_FAILED, "server failed to bind to address");
             }
 
@@ -493,17 +449,26 @@ namespace cppdtp {
         /**
          * Start the socket server, using the default port.
          *
-         * host: The address to host the server on.
+         * @param host The address to host the server on.
          */
         void start(std::string host) {
             start(host, CPPDTP_PORT);
         }
 
         /**
+         * Start the socket server, using the default host.
+         *
+         * @param port The port to host the server on.
+         */
+        void start(uint16_t port) {
+            start(CPPDTP_HOST, port);
+        }
+
+        /**
          * Start the socket server, using the default host and port.
          */
         void start() {
-            start(INADDR_ANY, CPPDTP_PORT);
+            start(CPPDTP_HOST, CPPDTP_PORT);
         }
 
         /**
@@ -548,17 +513,20 @@ namespace cppdtp {
             int client_sock = socket(CPPDTP_ADDRESS_FAMILY, SOCK_STREAM, 0);
 
             if (client_sock == -1) {
-                throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED, "server failed to initialize local client socket while shutting down");
+                throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED,
+                                      "server failed to initialize local client socket while shutting down");
             }
 
-            if (::connect(client_sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-                throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED, "server failed to connect local client to server while shutting down");
+            if (::connect(client_sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+                throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED,
+                                      "server failed to connect local client to server while shutting down");
             }
 
             sleep(0.01);
 
             if (close(client_sock) != 0) {
-                throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED, "server failed to disconnect local client while shutting down");
+                throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED,
+                                      "server failed to disconnect local client while shutting down");
             }
 
             if (close(sock.sock) != 0) {
@@ -570,7 +538,7 @@ namespace cppdtp {
         /**
          * Check if the server is serving.
          *
-         * Returns: If the server is serving.
+         * @return If the server is serving.
          */
         bool is_serving() {
             return serving;
@@ -579,7 +547,7 @@ namespace cppdtp {
         /**
          * Get the host of the server.
          *
-         * Returns: The host address of the server.
+         * @return The host address of the server.
          */
         std::string get_host() {
             // Make sure the server is running
@@ -587,7 +555,7 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
             }
 
-            char* addr = (char*)malloc(CPPDTP_ADDRSTRLEN * sizeof(char));
+            char *addr = (char *) malloc(CPPDTP_ADDRSTRLEN * sizeof(char));
 
 #ifdef _WIN32
             int addrlen = CPPDTP_ADDRSTRLEN;
@@ -618,7 +586,7 @@ namespace cppdtp {
         /**
          * Get the port of the server.
          *
-         * Returns: The port of the server.
+         * @return The port of the server.
          */
         uint16_t get_port() {
             // Make sure the server is running
@@ -632,7 +600,7 @@ namespace cppdtp {
         /**
          * Disconnect a client from the server.
          *
-         * client_id: The ID of the client to disconnect.
+         * @param client_id The ID of the client to disconnect.
          */
         void remove_client(size_t client_id) {
             // Make sure the server is running
@@ -661,17 +629,17 @@ namespace cppdtp {
         /**
          * Send data to a client.
          *
-         * client_id: The ID of the client to send the data to.
-         * data:      The data to send.
-         * data_size: The size of the data being sent, in bytes.
+         * @param client_id The ID of the client to send the data to.
+         * @param data The data to send.
+         * @param data_size The size of the data being sent, in bytes.
          */
-        void send(size_t client_id, void* data, size_t data_size) {
+        void send(size_t client_id, void *data, size_t data_size) {
             // Make sure the server is running
             if (!serving) {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
             }
 
-            char* message = _construct_message(data, data_size);
+            char *message = _construct_message(data, data_size);
 
             if (::send(clients[client_id].sock, &message[0], CPPDTP_LENSIZE + data_size, 0) < 0) {
                 throw CPPDTPException(CPPDTP_SERVER_SEND_FAILED, "failed to send data to client");
@@ -683,39 +651,41 @@ namespace cppdtp {
         /**
          * Send data to a client.
          *
-         * client_id: The ID of the client to send the data to.
-         * data:      The data to send.
-         * data_size: The size of the data being sent, in bytes.
+         * @tparam T The type of data being sent.
+         * @param client_id The ID of the client to send the data to.
+         * @param data The data to send.
+         * @param data_size The size of the data being sent, in bytes.
          */
-        template <typename T>
+        template<typename T>
         void send(size_t client_id, T data, size_t data_size) {
-            send(client_id, (void*)data, data_size);
+            send(client_id, (void *) data, data_size);
         }
 
         /**
          * Send data to a client.
          *
-         * client_id: The ID of the client to send the data to.
-         * data:      The data to send.
+         * @tparam T The type of data being sent.
+         * @param client_id The ID of the client to send the data to.
+         * @param data The data to send.
          */
-        template <typename T>
+        template<typename T>
         void send(size_t client_id, T data) {
-            send(client_id, (void*)data, sizeof(data));
+            send(client_id, (void *) data, sizeof(data));
         }
 
         /**
          * Send data to all clients.
          *
-         * data:      The data to send.
-         * data_size: The size of the data being sent, in bytes.
+         * @param data The data to send.
+         * @param data_size The size of the data being sent, in bytes.
          */
-        void send_all(void* data, size_t data_size) {
+        void send_all(void *data, size_t data_size) {
             // Make sure the server is running
             if (!serving) {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
             }
 
-            char* message = _construct_message(data, data_size);
+            char *message = _construct_message(data, data_size);
 
             for (size_t i = 0; i < max_clients; i++) {
                 if (allocated_clients[i]) {
@@ -731,22 +701,24 @@ namespace cppdtp {
         /**
          * Send data to all clients.
          *
-         * data:      The data to send.
-         * data_size: The size of the data being sent, in bytes.
+         * @tparam T The type of data being sent.
+         * @param data The data to send.
+         * @param data_size The size of the data being sent, in bytes.
          */
-        template <typename T>
+        template<typename T>
         void send_all(T data, size_t data_size) {
-            send_all((void*)data, data_size);
+            send_all((void *) data, data_size);
         }
 
         /**
          * Send data to all clients.
          *
-         * data: The data to send.
+         * @tparam T The type of data being sent.
+         * @param data The data to send.
          */
-        template <typename T>
+        template<typename T>
         void send_all(T data) {
-            send_all((void*)data, sizeof(data));
+            send_all((void *) data, sizeof(data));
         }
     }; // class Server
 

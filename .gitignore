@@ -34,4 +34,5 @@
 # Other
 todo.txt
 .vscode
+.idea
 *.DS_Store
