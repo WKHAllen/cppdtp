@@ -76,7 +76,7 @@ namespace cppdtp {
                 }
                 else {
                     size_t msg_size = _decode_message_size(size_buffer);
-                    char* buffer = (char*)malloc(msg_size * sizeof(char));
+                    char* buffer = new char[msg_size];
 
                     // Wait in case the message is sent in multiple chunks
                     sleep(0.01);
@@ -101,7 +101,7 @@ namespace cppdtp {
                         return;
                     }
                     else {
-                        call_on_receive((void*)buffer, msg_size);
+                        call_on_receive((void *) buffer, msg_size);
                     }
                 }
             }
@@ -143,7 +143,7 @@ namespace cppdtp {
                     return;
                 } else {
                     size_t msg_size = _decode_message_size(size_buffer);
-                    char *buffer = (char *) malloc(msg_size * sizeof(char));
+                    char *buffer = new char[msg_size];
 
                     // Wait in case the message is sent in multiple chunks
                     sleep(0.01);
@@ -255,9 +255,15 @@ namespace cppdtp {
             // Set the client address
 #ifdef _WIN32
             int addrlen = CPPDTP_ADDRSTRLEN;
-            if (WSAStringToAddress(&host[0], CPPDTP_ADDRESS_FAMILY, NULL, (LPSOCKADDR) & (sock.address), &addrlen) != 0) {
+
+            const char *host_cstr = host.c_str();
+            wchar_t *host_wc = cstr_to_wchar(host_cstr);
+
+            if (WSAStringToAddressW(host_wc, CPPDTP_ADDRESS_FAMILY, NULL, (LPSOCKADDR) & (sock.address), &addrlen) != 0) {
                 throw CPPDTPException(CPPDTP_CLIENT_ADDRESS_FAILED, "client address conversion failed");
             }
+
+            delete[] host_wc;
 #else
             if (inet_pton(CPPDTP_ADDRESS_FAMILY, &host[0], &(sock.address)) != 1) {
                 throw CPPDTPException(CPPDTP_CLIENT_ADDRESS_FAILED, "client address conversion failed");
@@ -295,7 +301,7 @@ namespace cppdtp {
             }
             else {
                 size_t msg_size = _decode_message_size(size_buffer);
-                char* buffer = (char*)malloc(msg_size * sizeof(char));
+                char* buffer = new char[msg_size];
                 recv_code = recv(sock.sock, buffer, msg_size, 0);
 
                 if (recv_code == SOCKET_ERROR) {
@@ -334,7 +340,7 @@ namespace cppdtp {
                 return;
             } else {
                 size_t msg_size = _decode_message_size(size_buffer);
-                char *buffer = (char *) malloc(msg_size * sizeof(char));
+                char *buffer = new char[msg_size];
                 recv_code = read(sock.sock, buffer, msg_size);
 
                 if (recv_code == 0) {
@@ -460,30 +466,37 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_CLIENT_NOT_CONNECTED, 0, "client is not connected to a server");
             }
 
-            char *addr = (char *) malloc(CPPDTP_ADDRSTRLEN * sizeof(char));
-
 #ifdef _WIN32
             int addrlen = CPPDTP_ADDRSTRLEN;
 
-            if (WSAAddressToString((LPSOCKADDR) & (sock.address), sizeof(sock.address), NULL, addr, (LPDWORD)&addrlen) != 0) {
+            wchar_t *addr_wc = new wchar_t[CPPDTP_ADDRSTRLEN];
+
+            if (WSAAddressToStringW((LPSOCKADDR) & (sock.address), sizeof(sock.address), NULL, addr_wc, (LPDWORD)&addrlen) != 0) {
                 throw CPPDTPException(CPPDTP_CLIENT_ADDRESS_FAILED, "client address conversion failed");
             }
 
             // Remove the port
-            for (int i = 0; i < CPPDTP_ADDRSTRLEN && addr[i] != '\0'; i++) {
-                if (addr[i] == ':') {
-                    addr[i] = '\0';
+            for (int i = 0; i < CPPDTP_ADDRSTRLEN && addr_wc[i] != '\0'; i++) {
+                if (addr_wc[i] == ':') {
+                    addr_wc[i] = '\0';
                     break;
                 }
             }
+
+            char *addr_cstr = wchar_to_cstr(addr_wc);
+            std::string addr_str(addr_cstr);
+            delete[] addr_wc;
+            delete[] addr_cstr;
 #else
+            char *addr = new char[CPPDTP_ADDRSTRLEN];
+
             if (inet_ntop(CPPDTP_ADDRESS_FAMILY, &(sock.address), addr, CPPDTP_ADDRSTRLEN) == NULL) {
                 throw CPPDTPException(CPPDTP_CLIENT_ADDRESS_FAILED, "client address conversion failed");
             }
-#endif
 
             std::string addr_str(addr);
-            free(addr);
+            delete[] addr;
+#endif
 
             return addr_str;
         }
@@ -520,7 +533,7 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_CLIENT_SEND_FAILED, "failed to send data to server");
             }
 
-            free(message);
+            delete[] message;
         }
 
         /**

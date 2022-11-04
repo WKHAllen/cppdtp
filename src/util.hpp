@@ -75,7 +75,7 @@
 #endif
 
 // Default CPPDTP host address
-#define CPPDTP_HOST INADDR_ANY
+#define CPPDTP_HOST "0.0.0.0"
 
 // Default CPPDTP port
 #ifndef CPPDTP_PORT
@@ -110,6 +110,9 @@ namespace cppdtp {
     static bool _cppdtp_init_status = false;
     static bool _cppdtp_exit_status = false;
 
+    /**
+     * Called on exit.
+     */
     void _cppdtp_exit() {
         if (!_cppdtp_exit_status) {
             _cppdtp_exit_status = true;
@@ -121,6 +124,11 @@ namespace cppdtp {
         }
     }
 
+    /**
+     * Called on library initialization.
+     *
+     * @return The initialization return status.
+     */
     int _cppdtp_init() {
         if (!_cppdtp_init_status) {
             _cppdtp_init_status = true;
@@ -138,6 +146,12 @@ namespace cppdtp {
         return 0;
     }
 
+    /**
+     * Encode the size portion of a message.
+     *
+     * @param size The message size.
+     * @return The message size encoded in bytes.
+     */
     unsigned char *_encode_message_size(size_t size) {
         unsigned char *encoded_size = new unsigned char[CPPDTP_LENSIZE];
 
@@ -149,6 +163,12 @@ namespace cppdtp {
         return encoded_size;
     }
 
+    /**
+     * Decode the size portion of a message.
+     *
+     * @param encoded_size The message size encoded in bytes.
+     * @return The size of the message.
+     */
     size_t _decode_message_size(unsigned char encoded_size[CPPDTP_LENSIZE]) {
         size_t size = 0;
 
@@ -160,10 +180,18 @@ namespace cppdtp {
         return size;
     }
 
+    /**
+     * Construct a message.
+     *
+     * @tparam T The type of data in the message.
+     * @param data The message data.
+     * @param data_size The size of the message.
+     * @return The constructed message.
+     */
     template<typename T>
     char *_construct_message(T data, size_t data_size) {
         char *data_str = (char *) data;
-        char *message = (char *) malloc((CPPDTP_LENSIZE + data_size) * sizeof(char));
+        char *message = new char[CPPDTP_LENSIZE + data_size];
         unsigned char *size = _encode_message_size(data_size);
 
         for (int i = 0; i < CPPDTP_LENSIZE; i++) {
@@ -177,11 +205,30 @@ namespace cppdtp {
         return message;
     }
 
+    /**
+     * Construct a message.
+     *
+     * @tparam T The type of data in the message.
+     * @param data The message data.
+     * @return The constructed message.
+     */
+    template<typename T>
+    char *_construct_message(T data) {
+        return _construct_message(data, sizeof(data));
+    }
+
+    /**
+     * Deconstruct a message.
+     *
+     * @tparam T The type of data in the message.
+     * @param message The message to be deconstructed.
+     * @return The deconstructed message.
+     */
     template<typename T>
     T _deconstruct_message(std::string message) {
         // only the first CPPDTP_LENSIZE bytes of message will be read as the size
         size_t data_size = _decode_message_size((unsigned char *) (&message[0]));
-        char *data = (char *) malloc(data_size * sizeof(char));
+        char *data = new char[data_size];
 
         for (size_t i = 0; i < data_size; i++) {
             data[i] = message[i + CPPDTP_LENSIZE];
@@ -190,6 +237,11 @@ namespace cppdtp {
         return (T) data;
     }
 
+    /**
+     * Sleep for a number of seconds.
+     *
+     * @param seconds The number of seconds to sleep.
+     */
     void sleep(double seconds) {
 #ifdef _WIN32
         Sleep(seconds * 1000);
@@ -200,6 +252,37 @@ namespace cppdtp {
         nanosleep(&ts, NULL);
 #endif
     }
+
+#ifdef _WIN32
+    /**
+     * Convert a C-style string to a wide character type.
+     *
+     * @param cstr The C-style string.
+     * @return The wide character string.
+     */
+    wchar_t *cstr_to_wchar(const char *cstr) {
+        size_t newsize = strlen(cstr) + 1;
+        wchar_t *wchar = new wchar_t[newsize];
+        size_t convertedChars = 0;
+        mbstowcs_s(&convertedChars, wchar, newsize, cstr, _TRUNCATE);
+        return wchar;
+    }
+
+    /**
+     * Convert a wide character string to a C-string.
+     *
+     * @param wchar The wide character string.
+     * @return The C-style string.
+     */
+    char *wchar_to_cstr(const wchar_t *wchar) {
+        size_t wcharsize = wcslen(wchar) + 1;
+        size_t convertedChars = 0;
+        const size_t newsize = wcharsize * 2;
+        char* cstr = new char[newsize];
+        wcstombs_s(&convertedChars, cstr, newsize, wchar, _TRUNCATE);
+        return cstr;
+    }
+#endif
 
 } // namespace cppdtp
 

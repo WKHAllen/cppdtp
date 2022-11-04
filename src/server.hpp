@@ -80,7 +80,7 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_STATUS_SEND_FAILED, "failed to send status code to client");
             }
 
-            free(message);
+            delete[] message;
         }
 
         /**
@@ -232,7 +232,7 @@ namespace cppdtp {
                         }
                         else {
                             size_t msg_size = _decode_message_size(size_buffer);
-                            char* buffer = (char*)malloc(msg_size * sizeof(char));
+                            char* buffer = new char[msg_size];
 
                             // Wait in case the message is sent in multiple chunks
                             sleep(0.01);
@@ -266,7 +266,7 @@ namespace cppdtp {
                             call_on_disconnect(i);
                         } else {
                             size_t msg_size = _decode_message_size(size_buffer);
-                            char *buffer = (char *) malloc(msg_size * sizeof(char));
+                            char *buffer = new char[msg_size];
 
                             // Wait in case the message is sent in multiple chunks
                             sleep(0.01);
@@ -291,6 +291,7 @@ namespace cppdtp {
          */
         void call_on_receive(size_t client_id, void *data, size_t data_size) {
             std::thread t(&cppdtp::Server::receive, this, client_id, data, data_size);
+            (void) t;
         }
 
         /**
@@ -298,6 +299,7 @@ namespace cppdtp {
          */
         void call_on_connect(size_t client_id) {
             std::thread t(&cppdtp::Server::connect, this, client_id);
+            (void) t;
         }
 
         /**
@@ -305,6 +307,7 @@ namespace cppdtp {
          */
         void call_on_disconnect(size_t client_id) {
             std::thread t(&cppdtp::Server::disconnect, this, client_id);
+            (void) t;
         }
 
         /**
@@ -419,9 +422,14 @@ namespace cppdtp {
 #ifdef _WIN32
             int addrlen = CPPDTP_ADDRSTRLEN;
 
-            if (WSAStringToAddress(&host[0], CPPDTP_ADDRESS_FAMILY, NULL, (LPSOCKADDR) & (sock.address), &addrlen) != 0) {
+            const char *host_cstr = host.c_str();
+            wchar_t *host_wc = cstr_to_wchar(host_cstr);
+
+            if (WSAStringToAddressW(host_wc, CPPDTP_ADDRESS_FAMILY, NULL, (LPSOCKADDR) & (sock.address), &addrlen) != 0) {
                 throw CPPDTPException(CPPDTP_SERVER_ADDRESS_FAILED, "server address conversion failed");
             }
+
+            delete[] host_wc;
 #else
             if (inet_pton(CPPDTP_ADDRESS_FAMILY, &host[0], &(sock.address)) != 1) {
                 throw CPPDTPException(CPPDTP_SERVER_ADDRESS_FAILED, "server address conversion failed");
@@ -555,30 +563,37 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
             }
 
-            char *addr = (char *) malloc(CPPDTP_ADDRSTRLEN * sizeof(char));
-
 #ifdef _WIN32
             int addrlen = CPPDTP_ADDRSTRLEN;
 
-            if (WSAAddressToString((LPSOCKADDR) & (sock.address), sizeof(sock.address), NULL, addr, (LPDWORD)&addrlen) != 0) {
+            wchar_t *addr_wc = new wchar_t[CPPDTP_ADDRSTRLEN];
+
+            if (WSAAddressToStringW((LPSOCKADDR) & (sock.address), sizeof(sock.address), NULL, addr_wc, (LPDWORD)&addrlen) != 0) {
                 throw CPPDTPException(CPPDTP_SERVER_ADDRESS_FAILED, "server address conversion failed");
             }
 
             // Remove the port
-            for (int i = 0; i < CPPDTP_ADDRSTRLEN && addr[i] != '\0'; i++) {
-                if (addr[i] == ':') {
-                    addr[i] = '\0';
+            for (int i = 0; i < CPPDTP_ADDRSTRLEN && addr_wc[i] != '\0'; i++) {
+                if (addr_wc[i] == ':') {
+                    addr_wc[i] = '\0';
                     break;
                 }
             }
+
+            char *addr_cstr = wchar_to_cstr(addr_wc);
+            std::string addr_str(addr_cstr);
+            delete[] addr_wc;
+            delete[] addr_cstr;
 #else
+            char *addr = new char[CPPDTP_ADDRSTRLEN];
+
             if (inet_ntop(CPPDTP_ADDRESS_FAMILY, &(sock.address), addr, CPPDTP_ADDRSTRLEN) == NULL) {
                 throw CPPDTPException(CPPDTP_SERVER_ADDRESS_FAILED, "server address conversion failed");
             }
-#endif
 
             std::string addr_str(addr);
-            free(addr);
+            delete[] addr;
+#endif
 
             return addr_str;
         }
@@ -645,7 +660,7 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_SERVER_SEND_FAILED, "failed to send data to client");
             }
 
-            free(message);
+            delete[] message;
         }
 
         /**
@@ -695,7 +710,7 @@ namespace cppdtp {
                 }
             }
 
-            free(message);
+            delete[] message;
         }
 
         /**

@@ -14,22 +14,19 @@ BUILD_FLAGS = \
 
 ifeq ($(OS),Windows_NT)
 	LINK_FLAGS = -lWs2_32
-	COPY_HEADERS = xcopy /s /y src\*.hpp bin\include >NUL
 	TEST_BINARY = bin\test
 	POST_BUILD_CMD = cd.
-	CLEAN_CMD = del bin\cppdtp bin\cppdtp.exe bin\test bin\test.exe bin\include\*.hpp
+	CLEAN_CMD = del bin\cppdtp bin\cppdtp.exe bin\test bin\test.exe
 else
 	LINK_FLAGS = -lpthread -lm
-	COPY_HEADERS = cp src/*.hpp bin/include/
 	TEST_BINARY = ./bin/test
 	POST_BUILD_CMD = chmod +x ./bin/test
-	CLEAN_CMD = rm -f bin/cppdtp bin/cppdtp.exe bin/test bin/test.exe bin/include/*.hpp
+	CLEAN_CMD = rm -f bin/cppdtp bin/cppdtp.exe bin/test bin/test.exe
 endif
 
 all: build
 
 build:
-	$(COPY_HEADERS) && \
 	$(CC) -o bin/test \
 		$(BUILD_FLAGS) \
 		test/*.cpp \
