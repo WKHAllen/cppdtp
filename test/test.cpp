@@ -20,46 +20,67 @@ using namespace std;
 const double wait_time = 0.1;
 
 /**
+ * The maximum number of clients a server can serve at once.
+ */
+const size_t max_clients = 16;
+
+/**
  * Test utility functions.
  */
 void test_util() {
+    // Test serialization and deserialization
+    bool test_bool = true;
+    int test_int = 1729;
+    size_t test_size_t = 47362409218;
+    float test_float = 3.14;
+    double test_double = 2.718;
+    array<int, 8> test_array = {0, 1, 1, 2, 3, 5, 8, 13};
+    string test_string = "Hello, cppdtp!";
+    assert_equal(cppdtp::_deserialize<bool>(cppdtp::_serialize(test_bool)), test_bool);
+    assert_equal(cppdtp::_deserialize<int>(cppdtp::_serialize(test_int)), test_int);
+    assert_equal(cppdtp::_deserialize<size_t>(cppdtp::_serialize(test_size_t)), test_size_t);
+    assert_floats_equal(cppdtp::_deserialize<float>(cppdtp::_serialize(test_float)), test_float);
+    assert_floats_equal(cppdtp::_deserialize<double>(cppdtp::_serialize(test_double)), test_double);
+    assert_arrays_equal(cppdtp::_deserialize<array<int, 8>>(cppdtp::_serialize(test_array)), test_array);
+    assert_equal(cppdtp::_deserialize<string>(cppdtp::_serialize(test_string)), test_string);
+
     // Test message size encoding
-    unsigned char *expected_msg_size1 = new unsigned char[CPPDTP_LENSIZE]{0, 0, 0, 0, 0};
-    unsigned char *expected_msg_size2 = new unsigned char[CPPDTP_LENSIZE]{0, 0, 0, 0, 1};
-    unsigned char *expected_msg_size3 = new unsigned char[CPPDTP_LENSIZE]{0, 0, 0, 0, 255};
-    unsigned char *expected_msg_size4 = new unsigned char[CPPDTP_LENSIZE]{0, 0, 0, 1, 0};
-    unsigned char *expected_msg_size5 = new unsigned char[CPPDTP_LENSIZE]{0, 0, 0, 1, 1};
-    unsigned char *expected_msg_size6 = new unsigned char[CPPDTP_LENSIZE]{1, 1, 1, 1, 1};
-    unsigned char *expected_msg_size7 = new unsigned char[CPPDTP_LENSIZE]{1, 2, 3, 4, 5};
-    unsigned char *expected_msg_size8 = new unsigned char[CPPDTP_LENSIZE]{11, 7, 5, 3, 2};
-    unsigned char *expected_msg_size9 = new unsigned char[CPPDTP_LENSIZE]{255, 255, 255, 255, 255};
-    unsigned char *msg_size1 = cppdtp::_encode_message_size(0);
-    unsigned char *msg_size2 = cppdtp::_encode_message_size(1);
-    unsigned char *msg_size3 = cppdtp::_encode_message_size(255);
-    unsigned char *msg_size4 = cppdtp::_encode_message_size(256);
-    unsigned char *msg_size5 = cppdtp::_encode_message_size(257);
-    unsigned char *msg_size6 = cppdtp::_encode_message_size(4311810305);
-    unsigned char *msg_size7 = cppdtp::_encode_message_size(4328719365);
-    unsigned char *msg_size8 = cppdtp::_encode_message_size(47362409218);
-    unsigned char *msg_size9 = cppdtp::_encode_message_size(1099511627775);
-    assert_arrays_equal(msg_size1, expected_msg_size1, CPPDTP_LENSIZE);
-    assert_arrays_equal(msg_size2, expected_msg_size2, CPPDTP_LENSIZE);
-    assert_arrays_equal(msg_size3, expected_msg_size3, CPPDTP_LENSIZE);
-    assert_arrays_equal(msg_size4, expected_msg_size4, CPPDTP_LENSIZE);
-    assert_arrays_equal(msg_size5, expected_msg_size5, CPPDTP_LENSIZE);
-    assert_arrays_equal(msg_size6, expected_msg_size6, CPPDTP_LENSIZE);
-    assert_arrays_equal(msg_size7, expected_msg_size7, CPPDTP_LENSIZE);
-    assert_arrays_equal(msg_size8, expected_msg_size8, CPPDTP_LENSIZE);
-    assert_arrays_equal(msg_size9, expected_msg_size9, CPPDTP_LENSIZE);
-    delete[] msg_size1;
-    delete[] msg_size2;
-    delete[] msg_size3;
-    delete[] msg_size4;
-    delete[] msg_size5;
-    delete[] msg_size6;
-    delete[] msg_size7;
-    delete[] msg_size8;
-    delete[] msg_size9;
+    const unsigned char expected_msg_size_arr1[CPPDTP_LENSIZE] = {0, 0, 0, 0, 0};
+    const unsigned char expected_msg_size_arr2[CPPDTP_LENSIZE] = {0, 0, 0, 0, 1};
+    const unsigned char expected_msg_size_arr3[CPPDTP_LENSIZE] = {0, 0, 0, 0, 255};
+    const unsigned char expected_msg_size_arr4[CPPDTP_LENSIZE] = {0, 0, 0, 1, 0};
+    const unsigned char expected_msg_size_arr5[CPPDTP_LENSIZE] = {0, 0, 0, 1, 1};
+    const unsigned char expected_msg_size_arr6[CPPDTP_LENSIZE] = {1, 1, 1, 1, 1};
+    const unsigned char expected_msg_size_arr7[CPPDTP_LENSIZE] = {1, 2, 3, 4, 5};
+    const unsigned char expected_msg_size_arr8[CPPDTP_LENSIZE] = {11, 7, 5, 3, 2};
+    const unsigned char expected_msg_size_arr9[CPPDTP_LENSIZE] = {255, 255, 255, 255, 255};
+    string expected_msg_size1(reinterpret_cast<const char *>(expected_msg_size_arr1), CPPDTP_LENSIZE);
+    string expected_msg_size2(reinterpret_cast<const char *>(expected_msg_size_arr2), CPPDTP_LENSIZE);
+    string expected_msg_size3(reinterpret_cast<const char *>(expected_msg_size_arr3), CPPDTP_LENSIZE);
+    string expected_msg_size4(reinterpret_cast<const char *>(expected_msg_size_arr4), CPPDTP_LENSIZE);
+    string expected_msg_size5(reinterpret_cast<const char *>(expected_msg_size_arr5), CPPDTP_LENSIZE);
+    string expected_msg_size6(reinterpret_cast<const char *>(expected_msg_size_arr6), CPPDTP_LENSIZE);
+    string expected_msg_size7(reinterpret_cast<const char *>(expected_msg_size_arr7), CPPDTP_LENSIZE);
+    string expected_msg_size8(reinterpret_cast<const char *>(expected_msg_size_arr8), CPPDTP_LENSIZE);
+    string expected_msg_size9(reinterpret_cast<const char *>(expected_msg_size_arr9), CPPDTP_LENSIZE);
+    string msg_size1 = cppdtp::_encode_message_size(0);
+    string msg_size2 = cppdtp::_encode_message_size(1);
+    string msg_size3 = cppdtp::_encode_message_size(255);
+    string msg_size4 = cppdtp::_encode_message_size(256);
+    string msg_size5 = cppdtp::_encode_message_size(257);
+    string msg_size6 = cppdtp::_encode_message_size(4311810305);
+    string msg_size7 = cppdtp::_encode_message_size(4328719365);
+    string msg_size8 = cppdtp::_encode_message_size(47362409218);
+    string msg_size9 = cppdtp::_encode_message_size(1099511627775);
+    assert_equal_arr_str(msg_size1, expected_msg_size1);
+    assert_equal_arr_str(msg_size2, expected_msg_size2);
+    assert_equal_arr_str(msg_size3, expected_msg_size3);
+    assert_equal_arr_str(msg_size4, expected_msg_size4);
+    assert_equal_arr_str(msg_size5, expected_msg_size5);
+    assert_equal_arr_str(msg_size6, expected_msg_size6);
+    assert_equal_arr_str(msg_size7, expected_msg_size7);
+    assert_equal_arr_str(msg_size8, expected_msg_size8);
+    assert_equal_arr_str(msg_size9, expected_msg_size9);
 
     // Test message size decoding
     assert_equal(cppdtp::_decode_message_size(expected_msg_size1), (size_t) 0);
@@ -71,28 +92,44 @@ void test_util() {
     assert_equal(cppdtp::_decode_message_size(expected_msg_size7), (size_t) 4328719365);
     assert_equal(cppdtp::_decode_message_size(expected_msg_size8), (size_t) 47362409218);
     assert_equal(cppdtp::_decode_message_size(expected_msg_size9), (size_t) 1099511627775);
-
-    // Cleanup
-    delete[] expected_msg_size1;
-    delete[] expected_msg_size2;
-    delete[] expected_msg_size3;
-    delete[] expected_msg_size4;
-    delete[] expected_msg_size5;
-    delete[] expected_msg_size6;
-    delete[] expected_msg_size7;
-    delete[] expected_msg_size8;
-    delete[] expected_msg_size9;
 }
 
 /**
  * Test crypto functions.
  */
-void test_crypto() {}
+void test_crypto() {
+    // TODO: test crypto functions
+}
 
 /**
  * Test server creation and serving.
  */
-void test_server_serve() {}
+void test_server_serve() {
+    // Create server
+    TestServer<int, string> s(max_clients);
+    assert(!s.is_serving());
+
+    // Start server
+    s.start();
+    assert(s.is_serving());
+    cppdtp::sleep(wait_time);
+
+    // Check server address info
+    string server_host = s.get_host();
+    uint16_t server_port = s.get_port();
+    cout << "Server address: " << server_host << ":" << server_port << endl;
+
+    // Stop server
+    s.stop();
+    assert(!s.is_serving());
+    cppdtp::sleep(wait_time);
+
+    // Check event counts
+    assert_equal(s.receive_count, 0);
+    assert_equal(s.connect_count, 0);
+    assert_equal(s.disconnect_count, 0);
+    assert(s.events_done());
+}
 
 /**
  * Test getting server and client addresses.

@@ -15,11 +15,22 @@
 #include <thread>
 
 namespace cppdtp {
+    template<typename S, typename R>
+    class Client;
 
-    // A socket server
+    /**
+     * A socket server.
+     *
+     * @tparam S The type of data that will be sent from the server.
+     * @tparam R The type of data that will be received by the server.
+     */
+    template<typename S, typename R>
     class Server {
+        static_assert(is_streamable<S>::value, "S must be streamable");
+        static_assert(is_streamable<R>::value, "R must be streamable");
+
     private:
-        friend class Client;
+        friend class Client<R, S>;
 
         // If the server is currently serving.
         bool serving = false;
@@ -74,13 +85,12 @@ namespace cppdtp {
         void send_status(int client_sock, int status_code)
 #endif
         {
-            char *message = _construct_message(&status_code, sizeof(status_code));
+            std::string message = _construct_message(&status_code);
+            const char *message_buffer = message.c_str();
 
-            if (::send(client_sock, &message[0], CPPDTP_LENSIZE + sizeof(status_code), 0) < 0) {
+            if (::send(client_sock, message_buffer, message.length(), 0) < 0) {
                 throw CPPDTPException(CPPDTP_STATUS_SEND_FAILED, "failed to send status code to client");
             }
-
-            delete[] message;
         }
 
         /**
@@ -103,7 +113,7 @@ namespace cppdtp {
          * Call the serve method.
          */
         void call_serve() {
-            serve_thread = new std::thread(&cppdtp::Server::serve, this);
+            serve_thread = new std::thread(&cppdtp::Server<S, R>::serve, this);
         }
 
         /**
@@ -123,7 +133,7 @@ namespace cppdtp {
             int max_sd = sock.sock;
 #endif
 
-            unsigned char size_buffer[CPPDTP_LENSIZE];
+            char size_buffer[CPPDTP_LENSIZE];
 
             while (serving) {
                 // Create the read sockets
@@ -213,7 +223,7 @@ namespace cppdtp {
                 for (size_t i = 0; i < max_clients; i++) {
                     if (allocated_clients[i] && FD_ISSET(clients[i].sock, &read_socks)) {
 #ifdef _WIN32
-                        int recv_code = recv(clients[i].sock, (char*)size_buffer, CPPDTP_LENSIZE, 0);
+                        int recv_code = recv(clients[i].sock, size_buffer, CPPDTP_LENSIZE, 0);
 
                         if (recv_code == SOCKET_ERROR) {
                             int err_code = WSAGetLastError();
@@ -231,7 +241,8 @@ namespace cppdtp {
                             call_on_disconnect(i);
                         }
                         else {
-                            size_t msg_size = _decode_message_size(size_buffer);
+                            std::string size_buffer_str(size_buffer);
+                            size_t msg_size = _decode_message_size(size_buffer_str);
                             char* buffer = new char[msg_size];
 
                             // Wait in case the message is sent in multiple chunks
@@ -255,7 +266,7 @@ namespace cppdtp {
                                 call_on_disconnect(i);
                             }
                             else {
-                                call_on_receive(i, (void*)buffer, msg_size);
+                                call_on_receive(i, buffer, msg_size);
                             }
                         }
 #else
@@ -265,7 +276,8 @@ namespace cppdtp {
                             disconnect_sock(i);
                             call_on_disconnect(i);
                         } else {
-                            size_t msg_size = _decode_message_size(size_buffer);
+                            std::string size_buffer_str(size_buffer);
+                            size_t msg_size = _decode_message_size(size_buffer_str);
                             char *buffer = new char[msg_size];
 
                             // Wait in case the message is sent in multiple chunks
@@ -277,7 +289,7 @@ namespace cppdtp {
                                 disconnect_sock(i);
                                 call_on_disconnect(i);
                             } else {
-                                call_on_receive(i, (void *) buffer, msg_size);
+                                call_on_receive(i, buffer, msg_size);
                             }
                         }
 #endif
@@ -289,16 +301,20 @@ namespace cppdtp {
         /**
          * Call the receive event method.
          */
-        void call_on_receive(size_t client_id, void *data, size_t data_size) {
-            std::thread t(&cppdtp::Server::receive, this, client_id, data, data_size);
+        void call_on_receive(size_t client_id, char* data, size_t data_size) {
+            std::string data_str(data, data_size);
+            R data_deserialized = _deserialize<R>(data_str);
+            delete[] data;
+            std::thread t(&cppdtp::Server<S, R>::receive, this, client_id, data_deserialized);
             (void) t;
+            (void) data_size;
         }
 
         /**
          * Call the connect event method.
          */
         void call_on_connect(size_t client_id) {
-            std::thread t(&cppdtp::Server::connect, this, client_id);
+            std::thread t(&cppdtp::Server<S, R>::connect, this, client_id);
             (void) t;
         }
 
@@ -306,7 +322,7 @@ namespace cppdtp {
          * Call the disconnect event method.
          */
         void call_on_disconnect(size_t client_id) {
-            std::thread t(&cppdtp::Server::disconnect, this, client_id);
+            std::thread t(&cppdtp::Server<S, R>::disconnect, this, client_id);
             (void) t;
         }
 
@@ -315,12 +331,10 @@ namespace cppdtp {
          *
          * @param client_id The ID of the client who sent the message.
          * @param data The data received from the client.
-         * @param data_size The size of the data received, in bytes.
          */
-        virtual void receive(size_t client_id, void *data, size_t data_size) {
+        virtual void receive(size_t client_id, R data) {
             (void) client_id;
             (void) data;
-            (void) data_size;
         }
 
         /**
@@ -431,7 +445,9 @@ namespace cppdtp {
 
             delete[] host_wc;
 #else
-            if (inet_pton(CPPDTP_ADDRESS_FAMILY, &host[0], &(sock.address)) != 1) {
+            const char *host_cstr = host.c_str();
+
+            if (inet_pton(CPPDTP_ADDRESS_FAMILY, host_cstr, &(sock.address)) != 1) {
                 throw CPPDTPException(CPPDTP_SERVER_ADDRESS_FAILED, "server address conversion failed");
             }
 #endif
@@ -646,94 +662,42 @@ namespace cppdtp {
          *
          * @param client_id The ID of the client to send the data to.
          * @param data The data to send.
-         * @param data_size The size of the data being sent, in bytes.
          */
-        void send(size_t client_id, void *data, size_t data_size) {
+        void send(size_t client_id, S data) {
             // Make sure the server is running
             if (!serving) {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
             }
 
-            char *message = _construct_message(data, data_size);
+            std::string message = _construct_message(data);
+            const char *message_buffer = message.c_str();
 
-            if (::send(clients[client_id].sock, &message[0], CPPDTP_LENSIZE + data_size, 0) < 0) {
+            if (::send(clients[client_id].sock, message_buffer, message.length(), 0) < 0) {
                 throw CPPDTPException(CPPDTP_SERVER_SEND_FAILED, "failed to send data to client");
             }
-
-            delete[] message;
-        }
-
-        /**
-         * Send data to a client.
-         *
-         * @tparam T The type of data being sent.
-         * @param client_id The ID of the client to send the data to.
-         * @param data The data to send.
-         * @param data_size The size of the data being sent, in bytes.
-         */
-        template<typename T>
-        void send(size_t client_id, T data, size_t data_size) {
-            send(client_id, (void *) data, data_size);
-        }
-
-        /**
-         * Send data to a client.
-         *
-         * @tparam T The type of data being sent.
-         * @param client_id The ID of the client to send the data to.
-         * @param data The data to send.
-         */
-        template<typename T>
-        void send(size_t client_id, T data) {
-            send(client_id, (void *) data, sizeof(data));
         }
 
         /**
          * Send data to all clients.
          *
          * @param data The data to send.
-         * @param data_size The size of the data being sent, in bytes.
          */
-        void send_all(void *data, size_t data_size) {
+        void send_all(S data) {
             // Make sure the server is running
             if (!serving) {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
             }
 
-            char *message = _construct_message(data, data_size);
+            std::string message = _construct_message(data);
+            const char *message_buffer = message.c_str();
 
             for (size_t i = 0; i < max_clients; i++) {
                 if (allocated_clients[i]) {
-                    if (::send(clients[i].sock, &message[0], CPPDTP_LENSIZE + data_size, 0) < 0) {
+                    if (::send(clients[i].sock, message_buffer, message.length(), 0) < 0) {
                         throw CPPDTPException(CPPDTP_SERVER_SEND_FAILED, "failed to send data to client");
                     }
                 }
             }
-
-            delete[] message;
-        }
-
-        /**
-         * Send data to all clients.
-         *
-         * @tparam T The type of data being sent.
-         * @param data The data to send.
-         * @param data_size The size of the data being sent, in bytes.
-         */
-        template<typename T>
-        void send_all(T data, size_t data_size) {
-            send_all((void *) data, data_size);
-        }
-
-        /**
-         * Send data to all clients.
-         *
-         * @tparam T The type of data being sent.
-         * @param data The data to send.
-         */
-        template<typename T>
-        void send_all(T data) {
-            send_all((void *) data, sizeof(data));
         }
     }; // class Server
 

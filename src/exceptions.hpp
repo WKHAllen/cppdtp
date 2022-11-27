@@ -6,10 +6,16 @@
 #ifndef CPPDTP_EXCEPTIONS_HPP
 #define CPPDTP_EXCEPTIONS_HPP
 
-#include "util.hpp"
-
 #include <exception>
 #include <string>
+
+#ifdef _WIN32
+#  include <WinSock2.h>
+#else
+
+#  include <errno.h>
+
+#endif
 
 namespace cppdtp {
 

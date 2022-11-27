@@ -15,11 +15,22 @@
 #include <thread>
 
 namespace cppdtp {
+    template<typename S, typename R>
+    class Server;
 
-    // A socket client
+    /**
+     * A socket client.
+     *
+     * @tparam S The type of data that will be sent from the client.
+     * @tparam R The type of data that will be received by the client.
+     */
+    template<typename S, typename R>
     class Client {
+        static_assert(is_streamable<S>::value, "S must be streamable");
+        static_assert(is_streamable<R>::value, "R must be streamable");
+
     private:
-        friend class Server;
+        friend class Server<R, S>;
 
         // If the client is currently connected.
         bool connected = false;
@@ -32,14 +43,14 @@ namespace cppdtp {
 
 #ifndef _WIN32
         // A local socket server, used for disconnecting the socket.
-        Server local_server;
+        Server<R, S> local_server;
 #endif
 
         /**
          * Call the handle method.
          */
         void call_handle() {
-            handle_thread = new std::thread(&cppdtp::Client::handle, this);
+            handle_thread = new std::thread(&cppdtp::Client<S, R>::handle, this);
         }
 
         /**
@@ -47,10 +58,10 @@ namespace cppdtp {
          */
         void handle() {
 #ifdef _WIN32
-            unsigned char size_buffer[CPPDTP_LENSIZE];
+            char size_buffer[CPPDTP_LENSIZE];
 
             while (connected) {
-                int recv_code = recv(sock.sock, (char*)size_buffer, CPPDTP_LENSIZE, 0);
+                int recv_code = recv(sock.sock, size_buffer, CPPDTP_LENSIZE, 0);
 
                 // Check if the client has disconnected
                 if (!connected) {
@@ -75,7 +86,8 @@ namespace cppdtp {
                     return;
                 }
                 else {
-                    size_t msg_size = _decode_message_size(size_buffer);
+                    std::string size_buffer_str(size_buffer);
+                    size_t msg_size = _decode_message_size(size_buffer_str);
                     char* buffer = new char[msg_size];
 
                     // Wait in case the message is sent in multiple chunks
@@ -101,7 +113,7 @@ namespace cppdtp {
                         return;
                     }
                     else {
-                        call_on_receive((void *) buffer, msg_size);
+                        call_on_receive(buffer, msg_size);
                     }
                 }
             }
@@ -110,7 +122,7 @@ namespace cppdtp {
             local_server.start(CPPDTP_LOCAL_SERVER_HOST, CPPDTP_LOCAL_SERVER_PORT);
             int max_sd = sock.sock > local_server.sock.sock ? sock.sock : local_server.sock.sock;
             int activity;
-            unsigned char size_buffer[CPPDTP_LENSIZE];
+            char size_buffer[CPPDTP_LENSIZE];
 
             while (connected) {
                 // Set sockets for select
@@ -142,7 +154,8 @@ namespace cppdtp {
                     call_on_disconnected();
                     return;
                 } else {
-                    size_t msg_size = _decode_message_size(size_buffer);
+                    std::string size_buffer_str(size_buffer);
+                    size_t msg_size = _decode_message_size(size_buffer_str);
                     char *buffer = new char[msg_size];
 
                     // Wait in case the message is sent in multiple chunks
@@ -155,7 +168,7 @@ namespace cppdtp {
                         call_on_disconnected();
                         return;
                     } else {
-                        call_on_receive((void *) buffer, msg_size);
+                        call_on_receive(buffer, msg_size);
                     }
                 }
             }
@@ -165,26 +178,30 @@ namespace cppdtp {
         /**
          * Call the receive event method.
          */
-        void call_on_receive(void *data, size_t data_size) {
-            std::thread t(&cppdtp::Client::receive, this, data, data_size);
+        void call_on_receive(char *data, size_t data_size) {
+            std::string data_str(data, data_size);
+            R data_deserialized = _deserialize<R>(data_str);
+            delete[] data;
+            std::thread t(&cppdtp::Client<S, R>::receive, this, data_deserialized);
+            (void) t;
+            (void) data_size;
         }
 
         /**
          * Call the disconnect event method.
          */
         void call_on_disconnected() {
-            std::thread t(&cppdtp::Client::disconnected, this);
+            std::thread t(&cppdtp::Client<S, R>::disconnected, this);
+            (void) t;
         }
 
         /**
          * An event method, called when a message is received from the server.
          *
          * @param data The data received from the server.
-         * @param data_size The size of the data received, in bytes.
          */
-        virtual void receive(void *data, size_t data_size) {
+        virtual void receive(R data) {
             (void) data;
-            (void) data_size;
         }
 
         /**
@@ -265,7 +282,9 @@ namespace cppdtp {
 
             delete[] host_wc;
 #else
-            if (inet_pton(CPPDTP_ADDRESS_FAMILY, &host[0], &(sock.address)) != 1) {
+            const char *host_cstr = host.c_str();
+
+            if (inet_pton(CPPDTP_ADDRESS_FAMILY, host_cstr, &(sock.address)) != 1) {
                 throw CPPDTPException(CPPDTP_CLIENT_ADDRESS_FAILED, "client address conversion failed");
             }
 #endif
@@ -278,9 +297,9 @@ namespace cppdtp {
             }
 
             // Check the return code
-            unsigned char size_buffer[CPPDTP_LENSIZE];
+            char size_buffer[CPPDTP_LENSIZE];
 #ifdef _WIN32
-            int recv_code = recv(sock.sock, (char*)size_buffer, CPPDTP_LENSIZE, 0);
+            int recv_code = recv(sock.sock, size_buffer, CPPDTP_LENSIZE, 0);
 
             if (recv_code == SOCKET_ERROR) {
                 int err_code = WSAGetLastError();
@@ -300,7 +319,8 @@ namespace cppdtp {
                 return;
             }
             else {
-                size_t msg_size = _decode_message_size(size_buffer);
+                std::string size_buffer_str(size_buffer);
+                size_t msg_size = _decode_message_size(size_buffer_str);
                 char* buffer = new char[msg_size];
                 recv_code = recv(sock.sock, buffer, msg_size, 0);
 
@@ -339,7 +359,8 @@ namespace cppdtp {
                 call_on_disconnected();
                 return;
             } else {
-                size_t msg_size = _decode_message_size(size_buffer);
+                std::string size_buffer_str(size_buffer);
+                size_t msg_size = _decode_message_size(size_buffer_str);
                 char *buffer = new char[msg_size];
                 recv_code = read(sock.sock, buffer, msg_size);
 
@@ -414,6 +435,7 @@ namespace cppdtp {
             // Connect to the local server to simulate activity
             std::string local_server_host = local_server.get_host();
             uint16_t local_server_port = local_server.get_port();
+            const char *local_server_host_cstr = local_server_host.c_str();
 
             int local_client_sock;
             struct sockaddr_in local_client_address;
@@ -423,7 +445,7 @@ namespace cppdtp {
                                       "client failed to initialize client socket while disconnecting");
             }
 
-            if (inet_pton(CPPDTP_ADDRESS_FAMILY, &local_server_host[0], &(local_client_address)) != 1) {
+            if (inet_pton(CPPDTP_ADDRESS_FAMILY, local_server_host_cstr, &(local_client_address)) != 1) {
                 throw CPPDTPException(CPPDTP_CLIENT_ADDRESS_FAILED,
                                       "client address conversion failed while disconnecting");
             }
@@ -519,44 +541,19 @@ namespace cppdtp {
          * Send data to the server.
          *
          * @param data The data to send.
-         * @param data_size The size of the data being sent, in bytes.
          */
-        void send(void *data, size_t data_size) {
+        void send(S data) {
             // Make sure the client is connected
             if (!connected) {
                 throw CPPDTPException(CPPDTP_CLIENT_NOT_CONNECTED, 0, "client is not connected to a server");
             }
 
-            char *message = _construct_message(data, data_size);
+            std::string message = _construct_message(data);
+            const char *message_buffer = message.c_str();
 
-            if (::send(sock.sock, &message[0], CPPDTP_LENSIZE + data_size, 0) < 0) {
+            if (::send(sock.sock, message_buffer, message.length(), 0) < 0) {
                 throw CPPDTPException(CPPDTP_CLIENT_SEND_FAILED, "failed to send data to server");
             }
-
-            delete[] message;
-        }
-
-        /**
-         * Send data to the server.
-         *
-         * @tparam T The type of data being sent.
-         * @param data The data to send.
-         * @param data_size The size of the data being sent, in bytes.
-         */
-        template<typename T>
-        void send(T data, size_t data_size) {
-            send((void *) data, data_size);
-        }
-
-        /**
-         * Send data to the server.
-         *
-         * @tparam T The type of data being sent.
-         * @param data The data to send.
-         */
-        template<typename T>
-        void send(T data) {
-            send((void *) data, sizeof(data));
         }
     }; // class Client
 

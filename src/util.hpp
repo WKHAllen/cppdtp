@@ -7,20 +7,22 @@
 #define CPPDTP_UTIL_HPP
 
 #include <string>
+#include <type_traits>
+#include <utility>
+#include "../include/c_plus_plus_serializer.h"
 
 #ifdef _WIN32
 #  include <WinSock2.h>
 #  include <Windows.h>
 #  include <WS2tcpip.h>
 #else
-
 #  include <unistd.h>
 #  include <sys/socket.h>
 #  include <netinet/in.h>
 #  include <arpa/inet.h>
 #  include <errno.h>
 #  include <time.h>
-
+#  include <limits.h>
 #endif
 
 // CPPDTP error codes
@@ -57,6 +59,7 @@
 #define CPPDTP_CLIENT_NOT_CONNECTED       30
 #define CPPDTP_CLIENT_SEND_FAILED         31
 #define CPPDTP_CLIENT_RECV_FAILED         32
+#define CPPDTP_GET_HOST_NAME_FAILED       33
 
 // Global address family to use
 #ifndef CPPDTP_ADDRESS_FAMILY
@@ -105,6 +108,13 @@
 // Server max clients indicator
 #define CPPDTP_SERVER_MAX_CLIENTS_REACHED UINT64_MAX
 
+// Hostname
+#ifdef _WIN32
+#  define CPPDTP_HOST_NAME_MAX_LEN MAX_COMPUTERNAME_LENGTH
+#else
+#  define CPPDTP_HOST_NAME_MAX_LEN HOST_NAME_MAX
+#endif
+
 namespace cppdtp {
 
     static bool _cppdtp_init_status = false;
@@ -147,20 +157,106 @@ namespace cppdtp {
     }
 
     /**
+     * Tests if a type can be streamed.
+     *
+     * @tparam T The type to be streamed.
+     */
+    template<typename T>
+    class is_streamable
+    {
+        template<typename TT>
+        static auto test_out(int) -> decltype( std::declval<std::ostream&>() << std::declval<Bits<TT&>>(), std::true_type() );
+
+        template<typename>
+        static auto test_out(...) -> std::false_type;
+
+        template<typename TT>
+        static auto test_in(int) -> decltype( std::declval<std::istream&>() >> std::declval<Bits<TT&>>(), std::true_type() );
+
+        template<typename>
+        static auto test_in(...) -> std::false_type;
+
+    public:
+        static const bool value = decltype(test_out<T>(0))::value && decltype(test_in<T>(0))::value;
+    };
+
+    /**
+     * Serialize an object to bytes.
+     *
+     * @tparam T The type of object.
+     * @param object The object to serialize.
+     * @return A string representing the binary representation of the object.
+     */
+    template<typename T>
+    const std::string _serialize(const T &object) {
+        static_assert(is_streamable<T>::value, "T must be streamable");
+
+        std::stringstream out;
+        out << bits(object);
+
+        const std::string bytes = out.str();
+        return bytes;
+
+//        std::array<unsigned char, sizeof(T)> bytes;
+//
+//        const unsigned char *begin = reinterpret_cast<const unsigned char *>(std::addressof(object));
+//        const unsigned char *end = begin + sizeof(T);
+//        std::copy(begin, end, std::begin(bytes));
+//
+//        return bytes;
+    }
+
+    /**
+     * Deserialize an object from bytes.
+     *
+     * @tparam T The type of object.
+     * @param bytes The byte representation of the object.
+     * @return The deserialized object.
+     */
+    template<typename T>
+    T _deserialize(const std::string &bytes) {
+        static_assert(is_streamable<T>::value, "T must be streamable");
+
+        T object;
+        std::stringstream in(bytes);
+        in >> bits(object);
+
+        return object;
+
+//        static_assert(std::is_trivially_copyable<T>::value, "not a TriviallyCopyable type");
+//
+//        T object;
+//
+//        unsigned char *begin_object = reinterpret_cast<unsigned char *>(std::addressof(object));
+//        std::copy(std::begin(bytes), std::end(bytes), begin_object);
+//
+//        return object;
+    }
+
+    /**
      * Encode the size portion of a message.
      *
      * @param size The message size.
      * @return The message size encoded in bytes.
      */
-    unsigned char *_encode_message_size(size_t size) {
-        unsigned char *encoded_size = new unsigned char[CPPDTP_LENSIZE];
+    const std::string _encode_message_size(size_t size) {
+        std::string encoded_size;
 
         for (int i = CPPDTP_LENSIZE - 1; i >= 0; i--) {
-            encoded_size[i] = size % 256;
+            encoded_size.insert(0, 1, size % 256);
             size = size >> 8;
         }
 
         return encoded_size;
+
+//        std::array<unsigned char, CPPDTP_LENSIZE> encoded_size;
+//
+//        for (int i = CPPDTP_LENSIZE - 1; i >= 0; i--) {
+//            encoded_size[i] = size % 256;
+//            size = size >> 8;
+//        }
+//
+//        return encoded_size;
     }
 
     /**
@@ -169,12 +265,12 @@ namespace cppdtp {
      * @param encoded_size The message size encoded in bytes.
      * @return The size of the message.
      */
-    size_t _decode_message_size(unsigned char encoded_size[CPPDTP_LENSIZE]) {
+    size_t _decode_message_size(const std::string &encoded_size) {
         size_t size = 0;
 
         for (int i = 0; i < CPPDTP_LENSIZE; i++) {
             size = size << 8;
-            size += encoded_size[i];
+            size += (unsigned char)(encoded_size[i]);
         }
 
         return size;
@@ -185,36 +281,24 @@ namespace cppdtp {
      *
      * @tparam T The type of data in the message.
      * @param data The message data.
-     * @param data_size The size of the message.
      * @return The constructed message.
      */
     template<typename T>
-    char *_construct_message(T data, size_t data_size) {
-        char *data_str = (char *) data;
-        char *message = new char[CPPDTP_LENSIZE + data_size];
-        unsigned char *size = _encode_message_size(data_size);
-
-        for (int i = 0; i < CPPDTP_LENSIZE; i++) {
-            message[i] = size[i];
-        }
-
-        for (size_t i = 0; i < data_size; i++) {
-            message[i + CPPDTP_LENSIZE] = data_str[i];
-        }
+    const std::string _construct_message(const T &data) {
+        std::string data_serialized = _serialize(data);
+        std::string size = _encode_message_size(data_serialized.length());
+        std::string message = size + data_serialized;
 
         return message;
-    }
 
-    /**
-     * Construct a message.
-     *
-     * @tparam T The type of data in the message.
-     * @param data The message data.
-     * @return The constructed message.
-     */
-    template<typename T>
-    char *_construct_message(T data) {
-        return _construct_message(data, sizeof(data));
+//        std::array<unsigned char, sizeof(T)> data_serialized = _serialize(data);
+//        std::array<unsigned char, CPPDTP_LENSIZE> size = _encode_message_size(sizeof(T));
+//
+//        std::array<unsigned char, CPPDTP_LENSIZE + sizeof(T)> message;
+//        std::copy(size.begin(), size.end(), message.begin());
+//        std::copy(data_serialized.begin(), data_serialized.end(), message.begin() + CPPDTP_LENSIZE);
+//
+//        return message;
     }
 
     /**
@@ -225,16 +309,24 @@ namespace cppdtp {
      * @return The deconstructed message.
      */
     template<typename T>
-    T _deconstruct_message(std::string message) {
-        // only the first CPPDTP_LENSIZE bytes of message will be read as the size
-        size_t data_size = _decode_message_size((unsigned char *) (&message[0]));
-        char *data = new char[data_size];
+    T _deconstruct_message(const std::string &message) {
+//        std::string size_portion = message.substr(0, CPPDTP_LENSIZE);
+//        size_t data_size = _decode_message_size(size_portion);
 
-        for (size_t i = 0; i < data_size; i++) {
-            data[i] = message[i + CPPDTP_LENSIZE];
-        }
+        std::string data_serialized = message.substr(CPPDTP_LENSIZE, message.length() - CPPDTP_LENSIZE);
+        T data = _deserialize<T>(data_serialized);
 
-        return (T) data;
+        return data;
+
+//        // std::array<unsigned char, CPPDTP_LENSIZE> size_portion;
+//        // std::copy(message.begin(), message.begin() + CPPDTP_LENSIZE, size_portion.begin());
+//        // size_t data_size = _decode_message_size(size_portion);
+//
+//        std::array<unsigned char, sizeof(T)> data_serialized;
+//        std::copy(message.begin() + CPPDTP_LENSIZE, message.end(), data_serialized);
+//        T data = _deserialize<T>(data_serialized);
+//
+//        return data;
     }
 
     /**
