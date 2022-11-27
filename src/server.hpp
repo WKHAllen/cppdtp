@@ -447,7 +447,7 @@ namespace cppdtp {
 #else
             const char *host_cstr = host.c_str();
 
-            if (inet_pton(CPPDTP_ADDRESS_FAMILY, host_cstr, &(sock.address)) != 1) {
+            if ((sock.address.sin_addr.s_addr = inet_addr(host_cstr)) == (in_addr_t)(-1)) {
                 throw CPPDTPException(CPPDTP_SERVER_ADDRESS_FAILED, "server address conversion failed");
             }
 #endif

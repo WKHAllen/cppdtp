@@ -196,14 +196,6 @@ namespace cppdtp {
 
         const std::string bytes = out.str();
         return bytes;
-
-//        std::array<unsigned char, sizeof(T)> bytes;
-//
-//        const unsigned char *begin = reinterpret_cast<const unsigned char *>(std::addressof(object));
-//        const unsigned char *end = begin + sizeof(T);
-//        std::copy(begin, end, std::begin(bytes));
-//
-//        return bytes;
     }
 
     /**
@@ -222,15 +214,6 @@ namespace cppdtp {
         in >> bits(object);
 
         return object;
-
-//        static_assert(std::is_trivially_copyable<T>::value, "not a TriviallyCopyable type");
-//
-//        T object;
-//
-//        unsigned char *begin_object = reinterpret_cast<unsigned char *>(std::addressof(object));
-//        std::copy(std::begin(bytes), std::end(bytes), begin_object);
-//
-//        return object;
     }
 
     /**
@@ -248,15 +231,6 @@ namespace cppdtp {
         }
 
         return encoded_size;
-
-//        std::array<unsigned char, CPPDTP_LENSIZE> encoded_size;
-//
-//        for (int i = CPPDTP_LENSIZE - 1; i >= 0; i--) {
-//            encoded_size[i] = size % 256;
-//            size = size >> 8;
-//        }
-//
-//        return encoded_size;
     }
 
     /**
@@ -290,15 +264,6 @@ namespace cppdtp {
         std::string message = size + data_serialized;
 
         return message;
-
-//        std::array<unsigned char, sizeof(T)> data_serialized = _serialize(data);
-//        std::array<unsigned char, CPPDTP_LENSIZE> size = _encode_message_size(sizeof(T));
-//
-//        std::array<unsigned char, CPPDTP_LENSIZE + sizeof(T)> message;
-//        std::copy(size.begin(), size.end(), message.begin());
-//        std::copy(data_serialized.begin(), data_serialized.end(), message.begin() + CPPDTP_LENSIZE);
-//
-//        return message;
     }
 
     /**
@@ -310,23 +275,10 @@ namespace cppdtp {
      */
     template<typename T>
     T _deconstruct_message(const std::string &message) {
-//        std::string size_portion = message.substr(0, CPPDTP_LENSIZE);
-//        size_t data_size = _decode_message_size(size_portion);
-
         std::string data_serialized = message.substr(CPPDTP_LENSIZE, message.length() - CPPDTP_LENSIZE);
         T data = _deserialize<T>(data_serialized);
 
         return data;
-
-//        // std::array<unsigned char, CPPDTP_LENSIZE> size_portion;
-//        // std::copy(message.begin(), message.begin() + CPPDTP_LENSIZE, size_portion.begin());
-//        // size_t data_size = _decode_message_size(size_portion);
-//
-//        std::array<unsigned char, sizeof(T)> data_serialized;
-//        std::copy(message.begin() + CPPDTP_LENSIZE, message.end(), data_serialized);
-//        T data = _deserialize<T>(data_serialized);
-//
-//        return data;
     }
 
     /**
