@@ -9,13 +9,21 @@
 #include <string>
 #include <type_traits>
 #include <utility>
-#include "../include/c_plus_plus_serializer.h"
+#include <iostream>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
+#include "../include/SimpleBinStream.h"
+
+#pragma GCC diagnostic pop
 
 #ifdef _WIN32
 #  include <WinSock2.h>
 #  include <Windows.h>
 #  include <WS2tcpip.h>
 #else
+
 #  include <unistd.h>
 #  include <sys/socket.h>
 #  include <netinet/in.h>
@@ -23,6 +31,7 @@
 #  include <errno.h>
 #  include <time.h>
 #  include <limits.h>
+
 #endif
 
 // CPPDTP error codes
@@ -117,6 +126,9 @@
 
 namespace cppdtp {
 
+    using mem_ostream = simple::mem_ostream<std::true_type>;
+    using mem_istream = simple::mem_istream<std::true_type>;
+
     static bool _cppdtp_init_status = false;
     static bool _cppdtp_exit_status = false;
 
@@ -157,63 +169,31 @@ namespace cppdtp {
     }
 
     /**
-     * Tests if a type can be streamed.
-     *
-     * @tparam T The type to be streamed.
-     */
-    template<typename T>
-    class is_streamable
-    {
-        template<typename TT>
-        static auto test_out(int) -> decltype( std::declval<std::ostream&>() << std::declval<Bits<TT&>>(), std::true_type() );
-
-        template<typename>
-        static auto test_out(...) -> std::false_type;
-
-        template<typename TT>
-        static auto test_in(int) -> decltype( std::declval<std::istream&>() >> std::declval<Bits<TT&>>(), std::true_type() );
-
-        template<typename>
-        static auto test_in(...) -> std::false_type;
-
-    public:
-        static const bool value = decltype(test_out<T>(0))::value && decltype(test_in<T>(0))::value;
-    };
-
-    /**
      * Serialize an object to bytes.
      *
-     * @tparam T The type of object.
+     * @tparam T The type of object. This must override the streaming operators to be serialized.
      * @param object The object to serialize.
      * @return A string representing the binary representation of the object.
      */
     template<typename T>
-    const std::string _serialize(const T &object) {
-        static_assert(is_streamable<T>::value, "T must be streamable");
+    const std::vector<char> _serialize(const T &object) {
+        mem_ostream out;
+        out << object;
 
-        std::stringstream out;
-        out << bits(object);
-
-        const std::string bytes = out.str();
-        return bytes;
+        return out.get_internal_vec();
     }
 
     /**
      * Deserialize an object from bytes.
      *
      * @tparam T The type of object.
+     * @param object The object to deserialize into.
      * @param bytes The byte representation of the object.
-     * @return The deserialized object.
      */
     template<typename T>
-    T _deserialize(const std::string &bytes) {
-        static_assert(is_streamable<T>::value, "T must be streamable");
-
-        T object;
-        std::stringstream in(bytes);
-        in >> bits(object);
-
-        return object;
+    void _deserialize(T &object, const std::vector<char> &bytes) {
+        mem_istream in(bytes);
+        in >> object;
     }
 
     /**
@@ -222,11 +202,11 @@ namespace cppdtp {
      * @param size The message size.
      * @return The message size encoded in bytes.
      */
-    const std::string _encode_message_size(size_t size) {
-        std::string encoded_size;
+    const std::vector<char> _encode_message_size(size_t size) {
+        std::vector<char> encoded_size;
 
         for (int i = CPPDTP_LENSIZE - 1; i >= 0; i--) {
-            encoded_size.insert(0, 1, size % 256);
+            encoded_size.insert(encoded_size.begin(), size % 256);
             size = size >> 8;
         }
 
@@ -239,12 +219,12 @@ namespace cppdtp {
      * @param encoded_size The message size encoded in bytes.
      * @return The size of the message.
      */
-    size_t _decode_message_size(const std::string &encoded_size) {
+    size_t _decode_message_size(const std::vector<char> &encoded_size) {
         size_t size = 0;
 
         for (int i = 0; i < CPPDTP_LENSIZE; i++) {
             size = size << 8;
-            size += (unsigned char)(encoded_size[i]);
+            size += (unsigned char) (encoded_size[i]);
         }
 
         return size;
@@ -258,10 +238,14 @@ namespace cppdtp {
      * @return The constructed message.
      */
     template<typename T>
-    const std::string _construct_message(const T &data) {
-        std::string data_serialized = _serialize(data);
-        std::string size = _encode_message_size(data_serialized.length());
-        std::string message = size + data_serialized;
+    const std::vector<char> _construct_message(const T &data) {
+        const std::vector<char> data_serialized = _serialize(data);
+        const std::vector<char> size = _encode_message_size(data_serialized.size());
+
+        std::vector<char> message;
+        message.reserve(size.size() + data_serialized.size());
+        message.insert(message.end(), size.begin(), size.end());
+        message.insert(message.end(), data_serialized.begin(), data_serialized.end());
 
         return message;
     }
@@ -270,15 +254,13 @@ namespace cppdtp {
      * Deconstruct a message.
      *
      * @tparam T The type of data in the message.
+     * @param object The object to deconstruct into.
      * @param message The message to be deconstructed.
-     * @return The deconstructed message.
      */
     template<typename T>
-    T _deconstruct_message(const std::string &message) {
-        std::string data_serialized = message.substr(CPPDTP_LENSIZE, message.length() - CPPDTP_LENSIZE);
-        T data = _deserialize<T>(data_serialized);
-
-        return data;
+    void _deconstruct_message(T &object, const std::vector<char> &message) {
+        std::vector<char> data_serialized(message.begin() + CPPDTP_LENSIZE, message.end());
+        _deserialize<T>(object, data_serialized);
     }
 
     /**
@@ -329,5 +311,31 @@ namespace cppdtp {
 #endif
 
 } // namespace cppdtp
+
+template<typename T>
+cppdtp::mem_ostream &operator<<(cppdtp::mem_ostream &out, const std::vector <T> &vec) {
+    size_t size = vec.size();
+    out << size;
+
+    for (size_t i = 0; i < vec.size(); i++) {
+        out << vec[i];
+    }
+
+    return out;
+}
+
+template<typename T>
+cppdtp::mem_istream &operator>>(cppdtp::mem_istream &in, std::vector <T> &vec) {
+    size_t size = 0;
+    in >> size;
+
+    for (size_t i = 0; i < size; i++) {
+        T val;
+        in >> val;
+        vec.push_back(val);
+    }
+
+    return in;
+}
 
 #endif // CPPDTP_UTIL_HPP

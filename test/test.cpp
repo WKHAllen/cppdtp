@@ -25,6 +25,49 @@ const double wait_time = 0.1;
 const size_t max_clients = 16;
 
 /**
+ * A custom class for serializing/deserializing.
+ */
+class Custom {
+public:
+    int a;
+    string b;
+    vector <string> c;
+
+    friend cppdtp::mem_ostream &operator<<(cppdtp::mem_ostream &out, const Custom &my) {
+        out << my.a << my.b << my.c;
+        return out;
+    }
+
+    friend cppdtp::mem_istream &operator>>(cppdtp::mem_istream &in, Custom &my) {
+        in >> my.a >> my.b >> my.c;
+        return in;
+    }
+
+    friend bool operator==(const Custom &lhs, const Custom &rhs) {
+        return lhs.a == rhs.a && lhs.b == rhs.b && lhs.c == rhs.c;
+    }
+
+    friend bool operator!=(const Custom &lhs, const Custom &rhs) {
+        return !(lhs == rhs);
+    }
+
+    friend ostream &operator<<(ostream &out, const Custom &my) {
+        out << my.a << ", \"" << my.b << "\", vec(" << my.c.size() << ")[";
+
+        for (size_t i = 0; i < my.c.size(); i++) {
+            out << my.c[i];
+
+            if (i < my.c.size() - 1) {
+                out << ", ";
+            }
+        }
+
+        out << "]";
+        return out;
+    }
+};
+
+/**
  * Test utility functions.
  */
 void test_util() {
@@ -35,14 +78,44 @@ void test_util() {
     float test_float = 3.14;
     double test_double = 2.718;
     array<int, 8> test_array = {0, 1, 1, 2, 3, 5, 8, 13};
+    vector<char> test_vector_char = {'d', 't', 'p'};
+    vector <string> test_vector_str = {"Hello", "from", "the serializer", ": )"};
     string test_string = "Hello, cppdtp!";
-    assert_equal(cppdtp::_deserialize<bool>(cppdtp::_serialize(test_bool)), test_bool);
-    assert_equal(cppdtp::_deserialize<int>(cppdtp::_serialize(test_int)), test_int);
-    assert_equal(cppdtp::_deserialize<size_t>(cppdtp::_serialize(test_size_t)), test_size_t);
-    assert_floats_equal(cppdtp::_deserialize<float>(cppdtp::_serialize(test_float)), test_float);
-    assert_floats_equal(cppdtp::_deserialize<double>(cppdtp::_serialize(test_double)), test_double);
-    assert_arrays_equal(cppdtp::_deserialize<array<int, 8>>(cppdtp::_serialize(test_array)), test_array);
-    assert_equal(cppdtp::_deserialize<string>(cppdtp::_serialize(test_string)), test_string);
+    Custom test_custom_class;
+    test_custom_class.a = 123;
+    test_custom_class.b = "Hello, custom class!";
+    test_custom_class.c.push_back("first item");
+    test_custom_class.c.push_back("second item");
+    bool test_bool_de;
+    int test_int_de;
+    size_t test_size_t_de;
+    float test_float_de;
+    double test_double_de;
+    array<int, 8> test_array_de;
+    vector<char> test_vector_char_de;
+    vector <string> test_vector_str_de;
+    string test_string_de;
+    Custom test_custom_class_de;
+    cppdtp::_deserialize(test_bool_de, cppdtp::_serialize(test_bool));
+    cppdtp::_deserialize(test_int_de, cppdtp::_serialize(test_int));
+    cppdtp::_deserialize(test_size_t_de, cppdtp::_serialize(test_size_t));
+    cppdtp::_deserialize(test_float_de, cppdtp::_serialize(test_float));
+    cppdtp::_deserialize(test_double_de, cppdtp::_serialize(test_double));
+    cppdtp::_deserialize(test_array_de, cppdtp::_serialize(test_array));
+    cppdtp::_deserialize(test_vector_char_de, cppdtp::_serialize(test_vector_char));
+    cppdtp::_deserialize(test_vector_str_de, cppdtp::_serialize(test_vector_str));
+    cppdtp::_deserialize(test_string_de, cppdtp::_serialize(test_string));
+    cppdtp::_deserialize(test_custom_class_de, cppdtp::_serialize(test_custom_class));
+    assert_equal(test_bool_de, test_bool);
+    assert_equal(test_int_de, test_int);
+    assert_equal(test_size_t_de, test_size_t);
+    assert_floats_equal(test_float_de, test_float);
+    assert_floats_equal(test_double_de, test_double);
+    assert_arrays_equal(test_array_de, test_array);
+    assert_arrays_equal(test_vector_char_de, test_vector_char);
+    assert_arrays_equal(test_vector_str_de, test_vector_str);
+    assert_equal(test_string_de, test_string);
+    assert_equal(test_custom_class_de, test_custom_class);
 
     // Test message size encoding
     const unsigned char expected_msg_size_arr1[CPPDTP_LENSIZE] = {0, 0, 0, 0, 0};
@@ -54,33 +127,33 @@ void test_util() {
     const unsigned char expected_msg_size_arr7[CPPDTP_LENSIZE] = {1, 2, 3, 4, 5};
     const unsigned char expected_msg_size_arr8[CPPDTP_LENSIZE] = {11, 7, 5, 3, 2};
     const unsigned char expected_msg_size_arr9[CPPDTP_LENSIZE] = {255, 255, 255, 255, 255};
-    string expected_msg_size1(reinterpret_cast<const char *>(expected_msg_size_arr1), CPPDTP_LENSIZE);
-    string expected_msg_size2(reinterpret_cast<const char *>(expected_msg_size_arr2), CPPDTP_LENSIZE);
-    string expected_msg_size3(reinterpret_cast<const char *>(expected_msg_size_arr3), CPPDTP_LENSIZE);
-    string expected_msg_size4(reinterpret_cast<const char *>(expected_msg_size_arr4), CPPDTP_LENSIZE);
-    string expected_msg_size5(reinterpret_cast<const char *>(expected_msg_size_arr5), CPPDTP_LENSIZE);
-    string expected_msg_size6(reinterpret_cast<const char *>(expected_msg_size_arr6), CPPDTP_LENSIZE);
-    string expected_msg_size7(reinterpret_cast<const char *>(expected_msg_size_arr7), CPPDTP_LENSIZE);
-    string expected_msg_size8(reinterpret_cast<const char *>(expected_msg_size_arr8), CPPDTP_LENSIZE);
-    string expected_msg_size9(reinterpret_cast<const char *>(expected_msg_size_arr9), CPPDTP_LENSIZE);
-    string msg_size1 = cppdtp::_encode_message_size(0);
-    string msg_size2 = cppdtp::_encode_message_size(1);
-    string msg_size3 = cppdtp::_encode_message_size(255);
-    string msg_size4 = cppdtp::_encode_message_size(256);
-    string msg_size5 = cppdtp::_encode_message_size(257);
-    string msg_size6 = cppdtp::_encode_message_size(4311810305);
-    string msg_size7 = cppdtp::_encode_message_size(4328719365);
-    string msg_size8 = cppdtp::_encode_message_size(47362409218);
-    string msg_size9 = cppdtp::_encode_message_size(1099511627775);
-    assert_equal_arr_str(msg_size1, expected_msg_size1);
-    assert_equal_arr_str(msg_size2, expected_msg_size2);
-    assert_equal_arr_str(msg_size3, expected_msg_size3);
-    assert_equal_arr_str(msg_size4, expected_msg_size4);
-    assert_equal_arr_str(msg_size5, expected_msg_size5);
-    assert_equal_arr_str(msg_size6, expected_msg_size6);
-    assert_equal_arr_str(msg_size7, expected_msg_size7);
-    assert_equal_arr_str(msg_size8, expected_msg_size8);
-    assert_equal_arr_str(msg_size9, expected_msg_size9);
+    vector<char> expected_msg_size1(expected_msg_size_arr1, expected_msg_size_arr1 + CPPDTP_LENSIZE);
+    vector<char> expected_msg_size2(expected_msg_size_arr2, expected_msg_size_arr2 + CPPDTP_LENSIZE);
+    vector<char> expected_msg_size3(expected_msg_size_arr3, expected_msg_size_arr3 + CPPDTP_LENSIZE);
+    vector<char> expected_msg_size4(expected_msg_size_arr4, expected_msg_size_arr4 + CPPDTP_LENSIZE);
+    vector<char> expected_msg_size5(expected_msg_size_arr5, expected_msg_size_arr5 + CPPDTP_LENSIZE);
+    vector<char> expected_msg_size6(expected_msg_size_arr6, expected_msg_size_arr6 + CPPDTP_LENSIZE);
+    vector<char> expected_msg_size7(expected_msg_size_arr7, expected_msg_size_arr7 + CPPDTP_LENSIZE);
+    vector<char> expected_msg_size8(expected_msg_size_arr8, expected_msg_size_arr8 + CPPDTP_LENSIZE);
+    vector<char> expected_msg_size9(expected_msg_size_arr9, expected_msg_size_arr9 + CPPDTP_LENSIZE);
+    vector<char> msg_size1 = cppdtp::_encode_message_size(0);
+    vector<char> msg_size2 = cppdtp::_encode_message_size(1);
+    vector<char> msg_size3 = cppdtp::_encode_message_size(255);
+    vector<char> msg_size4 = cppdtp::_encode_message_size(256);
+    vector<char> msg_size5 = cppdtp::_encode_message_size(257);
+    vector<char> msg_size6 = cppdtp::_encode_message_size(4311810305);
+    vector<char> msg_size7 = cppdtp::_encode_message_size(4328719365);
+    vector<char> msg_size8 = cppdtp::_encode_message_size(47362409218);
+    vector<char> msg_size9 = cppdtp::_encode_message_size(1099511627775);
+    assert_arrays_equal(msg_size1, expected_msg_size1);
+    assert_arrays_equal(msg_size2, expected_msg_size2);
+    assert_arrays_equal(msg_size3, expected_msg_size3);
+    assert_arrays_equal(msg_size4, expected_msg_size4);
+    assert_arrays_equal(msg_size5, expected_msg_size5);
+    assert_arrays_equal(msg_size6, expected_msg_size6);
+    assert_arrays_equal(msg_size7, expected_msg_size7);
+    assert_arrays_equal(msg_size8, expected_msg_size8);
+    assert_arrays_equal(msg_size9, expected_msg_size9);
 
     // Test message size decoding
     assert_equal(cppdtp::_decode_message_size(expected_msg_size1), (size_t) 0);

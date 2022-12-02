@@ -13,6 +13,8 @@
 
 #include <string>
 #include <thread>
+#include <memory>
+#include <utility>
 
 namespace cppdtp {
     template<typename S, typename R>
@@ -26,9 +28,6 @@ namespace cppdtp {
      */
     template<typename S, typename R>
     class Client {
-        static_assert(is_streamable<S>::value, "S must be streamable");
-        static_assert(is_streamable<R>::value, "R must be streamable");
-
     private:
         friend class Server<R, S>;
 
@@ -86,9 +85,11 @@ namespace cppdtp {
                     return;
                 }
                 else {
-                    std::string size_buffer_str(size_buffer);
-                    size_t msg_size = _decode_message_size(size_buffer_str);
-                    char* buffer = new char[msg_size];
+                    std::vector<char> size_buffer_vec(size_buffer, size_buffer + CPPDTP_LENSIZE);
+                    size_t msg_size = _decode_message_size(size_buffer_vec);
+                    std::vector<char> buffer_vec;
+                    buffer_vec.reserve(msg_size);
+                    char *buffer = buffer_vec.data();
 
                     // Wait in case the message is sent in multiple chunks
                     sleep(0.01);
@@ -113,7 +114,8 @@ namespace cppdtp {
                         return;
                     }
                     else {
-                        call_on_receive(buffer, msg_size);
+                        std::vector<char> data_vec(buffer, buffer + msg_size);
+                        call_on_receive(data_vec);
                     }
                 }
             }
@@ -154,9 +156,11 @@ namespace cppdtp {
                     call_on_disconnected();
                     return;
                 } else {
-                    std::string size_buffer_str(size_buffer);
-                    size_t msg_size = _decode_message_size(size_buffer_str);
-                    char *buffer = new char[msg_size];
+                    std::vector<char> size_buffer_vec(size_buffer, size_buffer + CPPDTP_LENSIZE);
+                    size_t msg_size = _decode_message_size(size_buffer_vec);
+                    std::vector<char> buffer_vec;
+                    buffer_vec.reserve(msg_size);
+                    char *buffer = buffer_vec.data();
 
                     // Wait in case the message is sent in multiple chunks
                     sleep(0.01);
@@ -168,7 +172,8 @@ namespace cppdtp {
                         call_on_disconnected();
                         return;
                     } else {
-                        call_on_receive(buffer, msg_size);
+                        std::vector<char> data_vec(buffer, buffer + msg_size);
+                        call_on_receive(data_vec);
                     }
                 }
             }
@@ -178,13 +183,11 @@ namespace cppdtp {
         /**
          * Call the receive event method.
          */
-        void call_on_receive(char *data, size_t data_size) {
-            std::string data_str(data, data_size);
-            R data_deserialized = _deserialize<R>(data_str);
-            delete[] data;
-            std::thread t(&cppdtp::Client<S, R>::receive, this, data_deserialized);
+        void call_on_receive(std::vector<char> data) {
+            R data_deserialized;
+            _deserialize(data_deserialized, data);
+            std::thread t(&cppdtp::Client<S, R>::receive, this, std::move(data_deserialized));
             (void) t;
-            (void) data_size;
         }
 
         /**
@@ -319,9 +322,12 @@ namespace cppdtp {
                 return;
             }
             else {
-                std::string size_buffer_str(size_buffer);
-                size_t msg_size = _decode_message_size(size_buffer_str);
-                char* buffer = new char[msg_size];
+                std::vector<char> size_buffer_vec(size_buffer, size_buffer + CPPDTP_LENSIZE);
+                size_t msg_size = _decode_message_size(size_buffer_vec);
+                std::vector<char> buffer_vec;
+                buffer_vec.reserve(msg_size);
+                char *buffer = buffer_vec.data();
+
                 recv_code = recv(sock.sock, buffer, msg_size, 0);
 
                 if (recv_code == SOCKET_ERROR) {
@@ -359,9 +365,12 @@ namespace cppdtp {
                 call_on_disconnected();
                 return;
             } else {
-                std::string size_buffer_str(size_buffer);
-                size_t msg_size = _decode_message_size(size_buffer_str);
-                char *buffer = new char[msg_size];
+                std::vector<char> size_buffer_vec(size_buffer, size_buffer + CPPDTP_LENSIZE);
+                size_t msg_size = _decode_message_size(size_buffer_vec);
+                std::vector<char> buffer_vec;
+                buffer_vec.reserve(msg_size);
+                char *buffer = buffer_vec.data();
+
                 recv_code = read(sock.sock, buffer, msg_size);
 
                 if (recv_code == 0) {
@@ -548,10 +557,10 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_CLIENT_NOT_CONNECTED, 0, "client is not connected to a server");
             }
 
-            std::string message = _construct_message(data);
-            const char *message_buffer = message.c_str();
+            std::vector<char> message = _construct_message(data);
+            const char *message_buffer = message.data();
 
-            if (::send(sock.sock, message_buffer, message.length(), 0) < 0) {
+            if (::send(sock.sock, message_buffer, message.size(), 0) < 0) {
                 throw CPPDTPException(CPPDTP_CLIENT_SEND_FAILED, "failed to send data to server");
             }
         }

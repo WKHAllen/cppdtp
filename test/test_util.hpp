@@ -99,6 +99,27 @@ void display_array(array <T, N> arr) {
 }
 
 /**
+ * Display a std::vector in the console.
+ *
+ * @tparam T The type of item stored in the vector.
+ * @param arr The vector.
+ */
+template<typename T>
+void display_array(vector <T> arr) {
+    cout << "[ ";
+
+    for (size_t i = 0; i < arr.size(); i++) {
+        cout << arr[i];
+
+        if (i < arr.size() - 1) {
+            cout << ", ";
+        }
+    }
+
+    cout << " ]";
+}
+
+/**
  * Display a string functioning as an array of characters.
  *
  * @param str The string.
@@ -189,6 +210,42 @@ void assert_arrays_equal(T a[], T b[], size_t size) {
 template<typename T, size_t N>
 void assert_arrays_equal(array <T, N> a, array <T, N> b) {
     for (size_t i = 0; i < N; i++) {
+        if (a[i] != b[i]) {
+            cout << "Arrays do not match:" << endl;
+            cout << "  First:    ";
+            display_array(a);
+            cout << endl;
+            cout << "  Second:   ";
+            display_array(b);
+            cout << endl;
+            cout << "Mismatch at index " << i << endl;
+            cout << "  " << a[i] << " != " << b[i] << endl;
+            assert(a[i] == b[i]);
+        }
+    }
+}
+
+/**
+ * Assert that two std::vectors are equal.
+ *
+ * @tparam T The type of item stored in the vectors.
+ * @param a The first vector.
+ * @param b The second vector.
+ */
+template<typename T>
+void assert_arrays_equal(vector <T> a, vector <T> b) {
+    if (a.size() != b.size()) {
+        cout << "Vectors do not match:" << endl;
+        cout << "  First:    ";
+        display_array(a);
+        cout << endl;
+        cout << "  Second:   ";
+        display_array(b);
+        cout << endl;
+        assert(a == b);
+    }
+
+    for (size_t i = 0; i < a.size(); i++) {
         if (a[i] != b[i]) {
             cout << "Arrays do not match:" << endl;
             cout << "  First:    ";
