@@ -288,6 +288,9 @@ namespace cppdtp {
                                 disconnect_sock(i);
                                 call_on_disconnect(i);
                             }
+                            else if (((size_t)recv_code) != msg_size) {
+                                throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, "failed to receive data from client");
+                            }
                             else {
                                 std::vector<char> data_vec(buffer, buffer + msg_size);
                                 call_on_receive(i, data_vec);
@@ -322,19 +325,15 @@ namespace cppdtp {
 
                             recv_code = read(clients[i].sock, buffer, msg_size);
 
-                            if (recv_code == 0) {
+                            if (recv_code == -1) {
+                                throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, "failed to receive data from client");
+                            }
+                            else if (recv_code == 0) {
                                 disconnect_sock(i);
                                 call_on_disconnect(i);
                             }
-                            else if (recv_code == -1) {
-                                int err_code = errno;
-
-                                if (err_code == EAGAIN || err_code == EWOULDBLOCK) {
-                                    // Nothing happened on the socket, do nothing
-                                }
-                                else {
-                                    throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, err_code, "failed to receive data from client");
-                                }
+                            else if (((size_t)recv_code) != msg_size) {
+                                throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, "failed to receive data from client");
                             }
                             else {
                                 std::vector<char> data_vec(buffer, buffer + msg_size);
