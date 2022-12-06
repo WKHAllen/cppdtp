@@ -9,7 +9,6 @@
 #include <string>
 #include <type_traits>
 #include <utility>
-#include <iostream>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -26,6 +25,7 @@
 
 #  include <unistd.h>
 #  include <sys/socket.h>
+#  include <fcntl.h>
 #  include <netinet/in.h>
 #  include <arpa/inet.h>
 #  include <errno.h>
@@ -68,7 +68,6 @@
 #define CPPDTP_CLIENT_NOT_CONNECTED       30
 #define CPPDTP_CLIENT_SEND_FAILED         31
 #define CPPDTP_CLIENT_RECV_FAILED         32
-#define CPPDTP_GET_HOST_NAME_FAILED       33
 
 // Global address family to use
 #ifndef CPPDTP_ADDRESS_FAMILY
@@ -76,8 +75,8 @@
 #endif
 
 // INET and INET6 address string length
-#define CPPDTP_INET_ADDRSTRLEN  22
-#define CPPDTP_INET6_ADDRSTRLEN 65
+#define CPPDTP_INET_ADDRSTRLEN  INET_ADDRSTRLEN
+#define CPPDTP_INET6_ADDRSTRLEN INET6_ADDRSTRLEN
 
 // Global address string length
 #if (CPPDTP_ADDRESS_FAMILY == AF_INET)
@@ -86,24 +85,15 @@
 #  define CPPDTP_ADDRSTRLEN CPPDTP_INET6_ADDRSTRLEN
 #endif
 
-// Default CPPDTP host address
-#define CPPDTP_HOST "0.0.0.0"
+// Default CPPDTP server host address
+#define CPPDTP_SERVER_HOST "0.0.0.0"
+
+// Default CPPDTP client host address
+#define CPPDTP_CLIENT_HOST "127.0.0.1"
 
 // Default CPPDTP port
 #ifndef CPPDTP_PORT
 #  define CPPDTP_PORT 29275
-#endif
-
-// Default CPPDTP local server host and port
-#ifndef CPPDTP_LOCAL_SERVER_HOST
-#  if (CPPDTP_ADDRESS_FAMILY == AF_INET)
-#    define CPPDTP_LOCAL_SERVER_HOST "127.0.0.1"
-#  else
-#    define CPPDTP_LOCAL_SERVER_HOST "::1"
-#  endif
-#endif
-#ifndef CPPDTP_LOCAL_SERVER_PORT
-#  define CPPDTP_LOCAL_SERVER_PORT (CPPDTP_PORT + 1)
 #endif
 
 // Default CPPDTP server listen backlog
@@ -116,13 +106,6 @@
 
 // Server max clients indicator
 #define CPPDTP_SERVER_MAX_CLIENTS_REACHED UINT64_MAX
-
-// Hostname
-#ifdef _WIN32
-#  define CPPDTP_HOST_NAME_MAX_LEN MAX_COMPUTERNAME_LENGTH
-#else
-#  define CPPDTP_HOST_NAME_MAX_LEN HOST_NAME_MAX
-#endif
 
 namespace cppdtp {
 
@@ -314,6 +297,8 @@ namespace cppdtp {
 
 template<typename T>
 cppdtp::mem_ostream &operator<<(cppdtp::mem_ostream &out, const std::vector <T> &vec) {
+    static_assert(std::is_default_constructible<T>::value, "T must be default constructible");
+
     size_t size = vec.size();
     out << size;
 
@@ -326,6 +311,8 @@ cppdtp::mem_ostream &operator<<(cppdtp::mem_ostream &out, const std::vector <T> 
 
 template<typename T>
 cppdtp::mem_istream &operator>>(cppdtp::mem_istream &in, std::vector <T> &vec) {
+    static_assert(std::is_default_constructible<T>::value, "T must be default constructible");
+
     size_t size = 0;
     in >> size;
 

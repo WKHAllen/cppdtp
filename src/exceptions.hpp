@@ -31,6 +31,9 @@ namespace cppdtp {
         // The exception message.
         std::string message;
 
+        // The exception info message.
+        std::string info_message;
+
     public:
         /**
          * Instantiate an exception.
@@ -45,6 +48,8 @@ namespace cppdtp {
             code = code_;
             underlying_code = underlying_code_;
             message = message_;
+            info_message = message + " (error code: " + std::to_string(code) + ", underlying error code: " +
+                           std::to_string(underlying_code) + ")";
         }
 
         /**
@@ -58,6 +63,8 @@ namespace cppdtp {
             underlying_code = errno;
 #endif
             message = message_;
+            info_message = message + " (error code: " + std::to_string(code) + ", underlying error code: " +
+                           std::to_string(underlying_code) + ")";
         }
 
         /**
@@ -84,7 +91,7 @@ namespace cppdtp {
          * Returns: The exception message.
          */
         const char *what() const throw() {
-            return message.c_str();
+            return info_message.c_str();
         }
     }; // class CPPDTPException
 

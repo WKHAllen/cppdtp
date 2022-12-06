@@ -179,7 +179,7 @@ void test_crypto() {
  */
 void test_server_serve() {
     // Create server
-    TestServer<int, string> s(max_clients);
+    TestServer<int, string> s(max_clients, 0, 0, 0);
     assert(!s.is_serving());
 
     // Start server
@@ -207,7 +207,66 @@ void test_server_serve() {
 /**
  * Test getting server and client addresses.
  */
-void test_addresses() {}
+void test_addresses() {
+    // Create server
+    TestServer<int, string> s(max_clients, 0, 1, 1);
+    assert(!s.is_serving());
+    s.start();
+    assert(s.is_serving());
+    string server_host = s.get_host();
+    uint16_t server_port = s.get_port();
+    cout << "Server address: " << server_host << ":" << server_port << endl;
+
+    // Create client
+    TestClient<string, int> c(0, 0);
+    assert(!c.is_connected());
+    c.connect();
+    assert(c.is_connected());
+    string client_host = c.get_host();
+    uint16_t client_port = c.get_port();
+    cout << "Client address: " << client_host << ":" << client_port << endl;
+    cppdtp::sleep(wait_time);
+
+    // Check addresses
+    cout << "Server (according to server): " << s.get_host() << ":" << s.get_port() << endl;
+    cout << "Server (according to client): " << c.get_server_host() << ":" << c.get_server_port() << endl;
+    cout << "Client (according to client): " << c.get_host() << ":" << c.get_port() << endl;
+    cout << "Client (according to server): " << s.get_client_host(0) << ":" << s.get_client_port(0) << endl;
+    assert(s.get_host() == "0.0.0.0");
+    assert(c.get_server_host() == "127.0.0.1");
+    assert(s.get_port() == c.get_server_port());
+    assert(c.get_host() == s.get_client_host(0));
+    assert(c.get_port() == s.get_client_port(0));
+
+    // Disconnect client
+    c.disconnect();
+    assert(!c.is_connected());
+    cppdtp::sleep(wait_time);
+
+    // Stop server
+    s.stop();
+    assert(!s.is_serving());
+    cppdtp::sleep(wait_time);
+
+    // Check event counts
+    assert_equal(s.receive_count, 0);
+    assert_equal(s.connect_count, 0);
+    assert_equal(s.disconnect_count, 0);
+    assert(s.events_done());
+    vector <string> s_received;
+    vector <size_t> s_received_ids;
+    vector <size_t> s_connect_ids = {0};
+    vector <size_t> s_disconnect_ids = {0};
+    assert_arrays_equal(s.received, s_received);
+    assert_arrays_equal(s.received_client_ids, s_received_ids);
+    assert_arrays_equal(s.connect_client_ids, s_connect_ids);
+    assert_arrays_equal(s.disconnect_client_ids, s_disconnect_ids);
+    assert_equal(c.receive_count, 0);
+    assert_equal(c.disconnected_count, 0);
+    assert(c.events_done());
+    vector<int> c_received;
+    assert_arrays_equal(c.received, c_received);
+}
 
 /**
  * Test sending messages between server and client.

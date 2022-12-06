@@ -27,6 +27,9 @@ namespace cppdtp {
      */
     template<typename S, typename R>
     class Server {
+        static_assert(std::is_default_constructible<S>::value, "S must be default constructible");
+        static_assert(std::is_default_constructible<R>::value, "R must be default constructible");
+
     private:
         friend class Client<R, S>;
 
@@ -118,80 +121,102 @@ namespace cppdtp {
          * Serve clients.
          */
         void serve() {
-            fd_set read_socks;
-            int activity;
             struct sockaddr_in address;
             int addrlen = sizeof(address);
 
 #ifdef _WIN32
+            // Set non-blocking
+            unsigned long mode = 1;
+
+            if (ioctlsocket(sock.sock, FIONBIO, &mode) != 0) {
+                throw CPPDTPException(CPPDTP_SERVER_SOCK_INIT_FAILED, "failed to initialize server socket");
+            }
+
             SOCKET new_sock;
-            int max_sd = 0;
 #else
+            // Set non-blocking
+            if (fcntl(sock.sock, F_SETFL, fcntl(sock.sock, F_GETFL, 0) | O_NONBLOCK) == -1) {
+                throw CPPDTPException(CPPDTP_SERVER_SOCK_INIT_FAILED, "failed to initialize server socket");
+            }
+
             int new_sock;
-            int max_sd = sock.sock;
 #endif
 
             char size_buffer[CPPDTP_LENSIZE];
+            int recv_code;
 
             while (serving) {
-                // Create the read sockets
-                FD_ZERO(&read_socks);
-                FD_SET(sock.sock, &read_socks);
-
-                for (size_t i = 0; i < max_clients; i++) {
-                    if (allocated_clients[i]) {
-                        FD_SET(clients[i].sock, &read_socks);
-
-#ifndef _WIN32
-                        if (clients[i].sock > max_sd) {
-                            max_sd = clients[i].sock;
-                        }
+                // Accept incoming connections
+#ifdef _WIN32
+                new_sock = accept(sock.sock, (struct sockaddr*)&address, (int*)&addrlen);
+#else
+                new_sock = accept(sock.sock, (struct sockaddr*)&address, (socklen_t*)&addrlen);
 #endif
-                    }
-                }
-
-                // Wait for activity
-                activity = select(max_sd + 1, &read_socks, NULL, NULL, NULL);
 
                 // Check if the server has been stopped
                 if (!serving) {
                     return;
                 }
 
-                // Check for select errors
-                if (activity < 0) {
-                    throw CPPDTPException(CPPDTP_SELECT_FAILED, "server socket select failed");
-                }
-
-                // Check if something happened on the main socket
-                if (FD_ISSET(sock.sock, &read_socks)) {
-                    // Accept the new socket and check if an error has occurred
 #ifdef _WIN32
-                    new_sock = accept(sock.sock, (struct sockaddr*)&address, (int*)&addrlen);
+                if (new_sock == INVALID_SOCKET) {
+                    int err_code = WSAGetLastError();
 
-                    if (new_sock == INVALID_SOCKET) {
-                        int err_code = WSAGetLastError();
-
-                        if (err_code != WSAENOTSOCK || serving) {
-                            throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, err_code, "failed to accept client socket");
-                        }
-
+                    if (err_code == WSAEWOULDBLOCK) {
+                        // No new connections, do nothing
+                    }
+                    else if (err_code != WSAENOTSOCK || serving) {
+                        throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, err_code, "failed to accept client socket");
+                    }
+                    else {
                         return;
                     }
+                }
+                else {
+                    // Put new socket in the client list
+                    size_t new_client_id = next_client_id();
+
+                    if (new_client_id != CPPDTP_SERVER_MAX_CLIENTS_REACHED) {
+                        // Set non-blocking
+                        mode = 1;
+
+                        if (ioctlsocket(sock.sock, FIONBIO, &mode) != 0) {
+                            throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, "failed to accept client socket");
+                        }
+
+                        // Add the new socket to the client array
+                        clients[new_client_id].sock = new_sock;
+                        clients[new_client_id].address = address;
+                        allocated_clients[new_client_id] = true;
+                        num_clients++;
+                        send_status(new_sock, CPPDTP_SUCCESS);
+                        call_on_connect(new_client_id);
+                    } else {
+                        // Tell the client that the server is full
+                        send_status(new_sock, CPPDTP_SERVER_FULL);
+                        closesocket(new_sock);
+                    }
+                }
 #else
-                    new_sock = accept(sock.sock, (struct sockaddr *) &address, (socklen_t * ) & addrlen);
+                if (new_sock < 0) {
+                    int err_code = errno;
 
-                    if (new_sock < 0) {
-                        int err_code = errno;
-
-                        if (err_code != ENOTSOCK || serving) {
-                            throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, err_code,
-                                                  "failed to accept client socket");
-                        }
-
+                    if (err_code == EAGAIN || err_code == EWOULDBLOCK) {
+                        // No new connections, do nothing
+                    }
+                    else if (err_code != ENOTSOCK || serving) {
+                        throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, err_code,
+                                              "failed to accept client socket");
+                    }
+                    else {
                         return;
                     }
-#endif
+                }
+                else {
+                    // Set non-blocking
+                    if (fcntl(sock.sock, F_SETFL, fcntl(sock.sock, F_GETFL, 0) | O_NONBLOCK) == -1) {
+                        throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, "failed to accept client socket");
+                    }
 
                     // Put new socket in the client list
                     size_t new_client_id = next_client_id();
@@ -207,21 +232,16 @@ namespace cppdtp {
                     } else {
                         // Tell the client that the server is full
                         send_status(new_sock, CPPDTP_SERVER_FULL);
-
-#ifdef _WIN32
-                        closesocket(new_sock);
-#else
                         close(new_sock);
-#endif
-
                     }
                 }
+#endif
 
                 // Check if something happened on one of the client sockets
                 for (size_t i = 0; i < max_clients; i++) {
-                    if (allocated_clients[i] && FD_ISSET(clients[i].sock, &read_socks)) {
+                    if (allocated_clients[i]) {
 #ifdef _WIN32
-                        int recv_code = recv(clients[i].sock, size_buffer, CPPDTP_LENSIZE, 0);
+                        recv_code = recv(clients[i].sock, size_buffer, CPPDTP_LENSIZE, 0);
 
                         if (recv_code == SOCKET_ERROR) {
                             int err_code = WSAGetLastError();
@@ -229,6 +249,9 @@ namespace cppdtp {
                             if (err_code == WSAECONNRESET) {
                                 disconnect_sock(i);
                                 call_on_disconnect(i);
+                            }
+                            else if (err_code == WSAEWOULDBLOCK) {
+                                // Nothing happened on the socket, do nothing
                             }
                             else {
                                 throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, err_code, "failed to receive data from client");
@@ -271,12 +294,23 @@ namespace cppdtp {
                             }
                         }
 #else
-                        int recv_code = read(clients[i].sock, size_buffer, CPPDTP_LENSIZE);
+                        recv_code = read(clients[i].sock, size_buffer, CPPDTP_LENSIZE);
 
                         if (recv_code == 0) {
                             disconnect_sock(i);
                             call_on_disconnect(i);
-                        } else {
+                        }
+                        else if (recv_code == -1) {
+                            int err_code = errno;
+
+                            if (err_code == EAGAIN || err_code == EWOULDBLOCK) {
+                                // Nothing happened on the socket, do nothing
+                            }
+                            else {
+                                throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, err_code, "failed to receive data from client");
+                            }
+                        }
+                        else {
                             std::vector<char> size_buffer_vec(size_buffer, size_buffer + CPPDTP_LENSIZE);
                             size_t msg_size = _decode_message_size(size_buffer_vec);
                             std::vector<char> buffer_vec;
@@ -291,7 +325,18 @@ namespace cppdtp {
                             if (recv_code == 0) {
                                 disconnect_sock(i);
                                 call_on_disconnect(i);
-                            } else {
+                            }
+                            else if (recv_code == -1) {
+                                int err_code = errno;
+
+                                if (err_code == EAGAIN || err_code == EWOULDBLOCK) {
+                                    // Nothing happened on the socket, do nothing
+                                }
+                                else {
+                                    throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, err_code, "failed to receive data from client");
+                                }
+                            }
+                            else {
                                 std::vector<char> data_vec(buffer, buffer + msg_size);
                                 call_on_receive(i, data_vec);
                             }
@@ -309,7 +354,7 @@ namespace cppdtp {
             R data_deserialized;
             _deserialize(data_deserialized, data);
             std::thread t(&cppdtp::Server<S, R>::receive, this, client_id, std::move(data_deserialized));
-            (void) t;
+            t.detach();
         }
 
         /**
@@ -317,7 +362,7 @@ namespace cppdtp {
          */
         void call_on_connect(size_t client_id) {
             std::thread t(&cppdtp::Server<S, R>::connect, this, client_id);
-            (void) t;
+            t.detach();
         }
 
         /**
@@ -325,7 +370,7 @@ namespace cppdtp {
          */
         void call_on_disconnect(size_t client_id) {
             std::thread t(&cppdtp::Server<S, R>::disconnect, this, client_id);
-            (void) t;
+            t.detach();
         }
 
         /**
@@ -409,10 +454,9 @@ namespace cppdtp {
         ~Server() {
             if (serving) {
                 stop();
+
                 delete[] clients;
                 delete[] allocated_clients;
-
-                serve_thread->join();
                 delete serve_thread;
             }
         }
@@ -487,14 +531,14 @@ namespace cppdtp {
          * @param port The port to host the server on.
          */
         void start(uint16_t port) {
-            start(CPPDTP_HOST, port);
+            start(CPPDTP_SERVER_HOST, port);
         }
 
         /**
          * Start the socket server, using the default host and port.
          */
         void start() {
-            start(CPPDTP_HOST, CPPDTP_PORT);
+            start(CPPDTP_SERVER_HOST, CPPDTP_PORT);
         }
 
         /**
@@ -531,34 +575,14 @@ namespace cppdtp {
                 }
             }
 
-            // Force the select function to return by attempting to connect
-            struct sockaddr_in addr;
-            addr.sin_addr.s_addr = sock.address.sin_addr.s_addr;
-            addr.sin_family = sock.address.sin_family;
-            addr.sin_port = sock.address.sin_port;
-            int client_sock = socket(CPPDTP_ADDRESS_FAMILY, SOCK_STREAM, 0);
-
-            if (client_sock == -1) {
-                throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED,
-                                      "server failed to initialize local client socket while shutting down");
-            }
-
-            if (::connect(client_sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-                throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED,
-                                      "server failed to connect local client to server while shutting down");
-            }
-
-            sleep(0.01);
-
-            if (close(client_sock) != 0) {
-                throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED,
-                                      "server failed to disconnect local client while shutting down");
-            }
-
             if (close(sock.sock) != 0) {
                 throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED, "server failed to close server socket");
             }
 #endif
+
+            if (serve_thread->joinable()) {
+                serve_thread->join();
+            }
         }
 
         /**
@@ -581,12 +605,21 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
             }
 
+            struct sockaddr_storage addr;
+            socklen_t len = sizeof(addr);
+
+            if (getsockname(sock.sock, (struct sockaddr*)&addr, &len) != 0) {
+                throw CPPDTPException(CPPDTP_CLIENT_ADDRESS_FAILED, "client address conversion failed");
+            }
+
+            struct sockaddr_in *s = (struct sockaddr_in*)&addr;
+
 #ifdef _WIN32
             int addrlen = CPPDTP_ADDRSTRLEN;
 
-            wchar_t *addr_wc = new wchar_t[CPPDTP_ADDRSTRLEN];
+            wchar_t addr_wc[CPPDTP_ADDRSTRLEN];
 
-            if (WSAAddressToStringW((LPSOCKADDR) & (sock.address), sizeof(sock.address), NULL, addr_wc, (LPDWORD)&addrlen) != 0) {
+            if (WSAAddressToStringW((LPSOCKADDR)s, sizeof(*s), NULL, addr_wc, (LPDWORD)&addrlen) != 0) {
                 throw CPPDTPException(CPPDTP_SERVER_ADDRESS_FAILED, "server address conversion failed");
             }
 
@@ -600,17 +633,15 @@ namespace cppdtp {
 
             char *addr_cstr = wchar_to_cstr(addr_wc);
             std::string addr_str(addr_cstr);
-            delete[] addr_wc;
             delete[] addr_cstr;
 #else
-            char *addr = new char[CPPDTP_ADDRSTRLEN];
+            char host[CPPDTP_ADDRSTRLEN];
 
-            if (inet_ntop(CPPDTP_ADDRESS_FAMILY, &(sock.address), addr, CPPDTP_ADDRSTRLEN) == NULL) {
+            if (inet_ntop(CPPDTP_ADDRESS_FAMILY, &s->sin_addr, host, CPPDTP_ADDRSTRLEN) == NULL) {
                 throw CPPDTPException(CPPDTP_SERVER_ADDRESS_FAILED, "server address conversion failed");
             }
 
-            std::string addr_str(addr);
-            delete[] addr;
+            std::string addr_str(host);
 #endif
 
             return addr_str;
@@ -627,7 +658,106 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
             }
 
-            return ntohs(sock.address.sin_port);
+            struct sockaddr_storage addr;
+            socklen_t len = sizeof(addr);
+
+            if (getsockname(sock.sock, (struct sockaddr*)&addr, &len) != 0) {
+                throw CPPDTPException(CPPDTP_SERVER_ADDRESS_FAILED, "server address conversion failed");
+            }
+
+            struct sockaddr_in *s = (struct sockaddr_in*)&addr;
+            uint16_t port = ntohs(s->sin_port);
+
+            return port;
+        }
+
+        /**
+         * Get the host of a client.
+         *
+         * @param client_id The ID of the client.
+         * @return The host address of the client.
+         */
+        std::string get_client_host(size_t client_id) {
+            // Make sure the server is running
+            if (!serving) {
+                throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
+            }
+
+            // Make sure the client exists
+            if (client_id >= max_clients || !allocated_clients[client_id]) {
+                throw CPPDTPException(CPPDTP_CLIENT_DOES_NOT_EXIST, 0, "client does not exist");
+            }
+
+            struct sockaddr_storage addr;
+            socklen_t len = sizeof(addr);
+
+            if (getpeername(clients[client_id].sock, (struct sockaddr*)&addr, &len) != 0) {
+                throw CPPDTPException(CPPDTP_CLIENT_ADDRESS_FAILED, "client address conversion failed");
+            }
+
+            struct sockaddr_in *s = (struct sockaddr_in*)&addr;
+
+#ifdef _WIN32
+            int addrlen = CPPDTP_ADDRSTRLEN;
+
+            wchar_t addr_wc[CPPDTP_ADDRSTRLEN];
+
+            if (WSAAddressToStringW((LPSOCKADDR)s, sizeof(*s), NULL, addr_wc, (LPDWORD)&addrlen) != 0) {
+                throw CPPDTPException(CPPDTP_CLIENT_ADDRESS_FAILED, "client address conversion failed");
+            }
+
+            // Remove the port
+            for (int i = 0; i < CPPDTP_ADDRSTRLEN && addr_wc[i] != '\0'; i++) {
+                if (addr_wc[i] == ':') {
+                    addr_wc[i] = '\0';
+                    break;
+                }
+            }
+
+            char *addr_cstr = wchar_to_cstr(addr_wc);
+            std::string addr_str(addr_cstr);
+            delete[] addr_cstr;
+#else
+            char host[CPPDTP_ADDRSTRLEN];
+
+            if (inet_ntop(CPPDTP_ADDRESS_FAMILY, &s->sin_addr, host, CPPDTP_ADDRSTRLEN) == NULL) {
+                throw CPPDTPException(CPPDTP_CLIENT_ADDRESS_FAILED, "client address conversion failed");
+            }
+
+            std::string addr_str(host);
+#endif
+
+            return addr_str;
+        }
+
+        /**
+         * Get the port of a client.
+         *
+         * @param client_id The ID of the client.
+         * @return The port of the client.
+         */
+        uint16_t get_client_port(size_t client_id) {
+            // Make sure the server is running
+            if (!serving) {
+                throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
+            }
+
+            // Make sure the client exists
+            if (client_id >= max_clients || !allocated_clients[client_id]) {
+                throw CPPDTPException(CPPDTP_CLIENT_DOES_NOT_EXIST, 0, "client does not exist");
+            }
+
+            struct sockaddr_storage addr;
+            socklen_t len = sizeof(addr);
+
+            if (getpeername(clients[client_id].sock, (struct sockaddr*)&addr, &len) != 0) {
+                throw CPPDTPException(CPPDTP_CLIENT_ADDRESS_FAILED, "client address conversion failed");
+            }
+
+            struct sockaddr_in *s = (struct sockaddr_in*)&addr;
+            uint16_t port = ntohs(s->sin_port);
+
+            return port;
         }
 
         /**

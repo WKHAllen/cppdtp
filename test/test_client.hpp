@@ -14,8 +14,6 @@ using namespace std;
 
 template<typename S, typename R>
 class TestClient : public cppdtp::Client<S, R> {
-    using cppdtp::Client<S, R>::Client;
-
 private:
     void receive(R data) override {
         receive_count--;
@@ -30,6 +28,10 @@ public:
     int receive_count = 0;
     int disconnected_count = 0;
     vector <R> received;
+
+    TestClient(int receive_count_, int disconnected_count_)
+            : cppdtp::Client<S, R>(),
+              receive_count(receive_count_), disconnected_count(disconnected_count_) {}
 
     bool events_done() {
         return receive_count == 0 && disconnected_count == 0;

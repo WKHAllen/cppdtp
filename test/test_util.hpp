@@ -73,7 +73,7 @@ void display_array(T arr[], size_t size) {
         }
     }
 
-    cout << " ]";
+    cout << " ]" << flush;
 }
 
 /**
@@ -95,7 +95,7 @@ void display_array(array <T, N> arr) {
         }
     }
 
-    cout << " ]";
+    cout << " ]" << flush;
 }
 
 /**
@@ -116,7 +116,7 @@ void display_array(vector <T> arr) {
         }
     }
 
-    cout << " ]";
+    cout << " ]" << flush;
 }
 
 /**
@@ -138,7 +138,7 @@ void display_arr_str(string str) {
         }
     }
 
-    cout << " ]";
+    cout << " ]" << flush;
 }
 
 /**
