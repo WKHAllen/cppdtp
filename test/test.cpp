@@ -216,6 +216,7 @@ void test_addresses() {
     string server_host = s.get_host();
     uint16_t server_port = s.get_port();
     cout << "Server address: " << server_host << ":" << server_port << endl;
+    cppdtp::sleep(wait_time);
 
     // Create client
     TestClient<string, int> c(0, 0);
@@ -271,17 +272,243 @@ void test_addresses() {
 /**
  * Test sending messages between server and client.
  */
-void test_send_receive() {}
+void test_send_receive() {
+    // Create server
+    TestServer<string, string> s(max_clients, 1, 1, 1);
+    s.start();
+    string server_host = s.get_host();
+    uint16_t server_port = s.get_port();
+    cout << "Server address: " << server_host << ":" << server_port << endl;
+    cppdtp::sleep(wait_time);
+
+    // Create client
+    TestClient<string, string> c(1, 0);
+    c.connect();
+    cppdtp::sleep(wait_time);
+
+    // Send messages
+    string server_message = "Hello, server!";
+    string client_message = "Hello, client #0!";
+    c.send(server_message);
+    s.send(0, client_message);
+    cppdtp::sleep(wait_time);
+
+    // Disconnect client
+    c.disconnect();
+    cppdtp::sleep(wait_time);
+
+    // Stop server
+    s.stop();
+    cppdtp::sleep(wait_time);
+
+    // Check event counts
+    assert_equal(s.receive_count, 0);
+    assert_equal(s.connect_count, 0);
+    assert_equal(s.disconnect_count, 0);
+    assert(s.events_done());
+    vector <string> s_received = {server_message};
+    vector <size_t> s_received_ids = {0};
+    vector <size_t> s_connect_ids = {0};
+    vector <size_t> s_disconnect_ids = {0};
+    assert_arrays_equal(s.received, s_received);
+    assert_arrays_equal(s.received_client_ids, s_received_ids);
+    assert_arrays_equal(s.connect_client_ids, s_connect_ids);
+    assert_arrays_equal(s.disconnect_client_ids, s_disconnect_ids);
+    assert_equal(c.receive_count, 0);
+    assert_equal(c.disconnected_count, 0);
+    assert(c.events_done());
+    vector <string> c_received = {client_message};
+    assert_arrays_equal(c.received, c_received);
+}
 
 /**
  * Test sending large random messages between server and client.
  */
-void test_send_large_messages() {}
+void test_send_large_messages() {
+    // Create server
+    TestServer<vector<char>, vector<char>> s(max_clients, 1, 1, 1);
+    s.start();
+    string server_host = s.get_host();
+    uint16_t server_port = s.get_port();
+    cout << "Server address: " << server_host << ":" << server_port << endl;
+    cppdtp::sleep(wait_time);
+
+    // Create client
+    TestClient<vector<char>, vector<char>> c(1, 0);
+    c.connect();
+    cppdtp::sleep(wait_time);
+
+    // Send messages
+    size_t large_server_message_len = rand_int(32768, 65536);
+    vector<char> large_server_message = rand_bytes(large_server_message_len);
+    size_t large_client_message_len = rand_int(16384, 32768);
+    vector<char> large_client_message = rand_bytes(large_client_message_len);
+    c.send(large_server_message);
+    s.send(0, large_client_message);
+    cppdtp::sleep(wait_time);
+
+    // Disconnect client
+    c.disconnect();
+    cppdtp::sleep(wait_time);
+
+    // Stop server
+    s.stop();
+    cppdtp::sleep(wait_time);
+
+    // Check event counts
+    assert_equal(s.receive_count, 0);
+    assert_equal(s.connect_count, 0);
+    assert_equal(s.disconnect_count, 0);
+    assert(s.events_done());
+    vector <size_t> s_received_ids = {0};
+    vector <size_t> s_connect_ids = {0};
+    vector <size_t> s_disconnect_ids = {0};
+    assert(s.received.size() == 1);
+    assert(s.received[0] == large_server_message);
+    assert_arrays_equal(s.received_client_ids, s_received_ids);
+    assert_arrays_equal(s.connect_client_ids, s_connect_ids);
+    assert_arrays_equal(s.disconnect_client_ids, s_disconnect_ids);
+    assert_equal(c.receive_count, 0);
+    assert_equal(c.disconnected_count, 0);
+    assert(c.events_done());
+    assert(c.received.size() == 1);
+    assert(c.received[0] == large_client_message);
+
+    // Log message sizes
+    cout << "Server message sizes: " << s.received[0].size() << ", " << large_server_message_len << ", " << large_server_message.size() << endl;
+    cout << "Client message sizes: " << c.received[0].size() << ", " << large_client_message_len << ", " << large_client_message.size() << endl;
+}
 
 /**
  * Test sending numerous random messages between server and client.
  */
-void test_sending_numerous_messages() {}
+void test_sending_numerous_messages() {
+    // Messages
+    size_t num_server_messages = rand_int(64, 128);
+    vector<int> server_messages;
+    server_messages.reserve(num_server_messages);
+    for (size_t i = 0; i < num_server_messages; i++) server_messages.push_back(rand());
+    size_t num_client_messages = rand_int(128, 256);
+    vector<int> client_messages;
+    client_messages.reserve(num_client_messages);
+    for (size_t i = 0; i < num_client_messages; i++) client_messages.push_back(rand());
+
+    // Create server
+    TestServer<int, int> s(max_clients, num_server_messages, 1, 1);
+    s.start();
+    string server_host = s.get_host();
+    uint16_t server_port = s.get_port();
+    cout << "Server address: " << server_host << ":" << server_port << endl;
+    cppdtp::sleep(wait_time);
+
+    // Create client
+    TestClient<int, int> c(num_client_messages, 0);
+    c.connect();
+    cppdtp::sleep(wait_time);
+
+    // Send messages
+    for (size_t i = 0; i < num_server_messages; i++) {
+        c.send(server_messages[i]);
+        cppdtp::sleep(0.01);
+    }
+    for (size_t i = 0; i < num_client_messages; i++) {
+        s.send_all(client_messages[i]);
+        cppdtp::sleep(0.01);
+    }
+    cppdtp::sleep(5);
+
+    // Disconnect client
+    c.disconnect();
+    cppdtp::sleep(wait_time);
+
+    // Stop server
+    s.stop();
+    cppdtp::sleep(wait_time);
+
+    // Check event counts
+    assert_equal(s.receive_count, 0);
+    assert_equal(s.connect_count, 0);
+    assert_equal(s.disconnect_count, 0);
+    assert(s.events_done());
+    vector <size_t> s_connect_ids = {0};
+    vector <size_t> s_disconnect_ids = {0};
+    assert_arrays_equal(s.received, server_messages);
+    assert_arrays_equal(s.connect_client_ids, s_connect_ids);
+    assert_arrays_equal(s.disconnect_client_ids, s_disconnect_ids);
+    assert_equal(c.receive_count, 0);
+    assert_equal(c.disconnected_count, 0);
+    assert(c.events_done());
+    assert_arrays_equal(c.received, client_messages);
+
+    // Log number of messages
+    cout << "Number of server messages: " << s.received.size() << ", " << num_server_messages << ", " << server_messages.size() << endl;
+    cout << "Number of client messages: " << c.received.size() << ", " << num_client_messages << ", " << client_messages.size() << endl;
+}
+
+/**
+ * Test sending and receiving custom types.
+ */
+void test_sending_custom_types() {
+    // Create server
+    TestServer<Custom, Custom> s(max_clients, 1, 1, 1);
+    s.start();
+    string server_host = s.get_host();
+    uint16_t server_port = s.get_port();
+    cout << "Server address: " << server_host << ":" << server_port << endl;
+    cppdtp::sleep(wait_time);
+
+    // Create client
+    TestClient<Custom, Custom> c(1, 0);
+    c.connect();
+    cppdtp::sleep(wait_time);
+
+    // Send messages
+    Custom custom_server_message;
+    custom_server_message.a = 234;
+    custom_server_message.b = "Hello, custom class (server)!";
+    custom_server_message.c.push_back("first server item");
+    custom_server_message.c.push_back("second server item");
+    Custom custom_client_message;
+    custom_client_message.a = 345;
+    custom_client_message.b = "Hello, custom class (client)!";
+    custom_client_message.c.push_back("only client item");
+    c.send(custom_server_message);
+    s.send(0, custom_client_message);
+    cppdtp::sleep(wait_time);
+
+    // Disconnect client
+    c.disconnect();
+    cppdtp::sleep(wait_time);
+
+    // Stop server
+    s.stop();
+    cppdtp::sleep(wait_time);
+
+    // Check event counts
+    assert_equal(s.receive_count, 0);
+    assert_equal(s.connect_count, 0);
+    assert_equal(s.disconnect_count, 0);
+    assert(s.events_done());
+    vector <size_t> s_received_ids = {0};
+    vector <size_t> s_connect_ids = {0};
+    vector <size_t> s_disconnect_ids = {0};
+    assert(s.received.size() == 1);
+    assert(s.received[0] == custom_server_message);
+    assert_arrays_equal(s.received_client_ids, s_received_ids);
+    assert_arrays_equal(s.connect_client_ids, s_connect_ids);
+    assert_arrays_equal(s.disconnect_client_ids, s_disconnect_ids);
+    assert_equal(c.receive_count, 0);
+    assert_equal(c.disconnected_count, 0);
+    assert(c.events_done());
+    assert(c.received.size() == 1);
+    assert(c.received[0] == custom_client_message);
+
+    // Log custom messages
+    cout << "Server message (sent):     " << custom_server_message << endl;
+    cout << "Server message (received): " << s.received[0] << endl;
+    cout << "Client message (sent):     " << custom_client_message << endl;
+    cout << "Client message (received): " << c.received[0] << endl;
+}
 
 /**
  * Test having multiple clients connected.
@@ -328,6 +555,8 @@ int main() {
     test_send_large_messages();
     cout << endl << "Testing sending numerous messages..." << endl;
     test_sending_numerous_messages();
+    cout << endl << "Testing sending custom types..." << endl;
+    test_sending_custom_types();
     cout << endl << "Testing with multiple clients..." << endl;
     test_multiple_clients();
     cout << endl << "Testing disconnecting clients..." << endl;

@@ -17,9 +17,9 @@ class TestServer : public cppdtp::Server<S, R> {
 private:
     void receive(size_t client_id, R data) override {
         if (reply_with_string_length) {
-            string str_data((string) data);
+            string str_data(*((string*) (&data)));
             size_t str_len = str_data.length();
-            S send_len = (S) str_len;
+            S send_len = *((S *) (&str_len));
             this->send(client_id, send_len);
         }
 

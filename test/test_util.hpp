@@ -11,18 +11,18 @@ using namespace std;
 /**
  * Generate a random number.
  *
- * @param min The random range minimum.
- * @param max The random range maximum.
+ * @param min The random range minimum (inclusive).
+ * @param max The random range maximum (exclusive).
  * @return The randomly generated number.
  */
 int rand_int(int min, int max) {
-    return min + (rand() % (max - min + 1));
+    return min + (rand() % (max - min));
 }
 
 /**
  * Generate a random number.
  *
- * @param max The random range maximum.
+ * @param max The random range maximum (exclusive).
  * @return The randomly generated number.
  */
 int rand_int(int max) {
@@ -44,11 +44,12 @@ int rand_int() {
  * @param size The number of bytes to generate.
  * @return The randomly generated series of bytes.
  */
-char *rand_bytes(size_t size) {
-    char *bytes = new char[size];
+vector<char> rand_bytes(size_t size) {
+    vector<char> bytes;
+    bytes.reserve(size);
 
     for (size_t i = 0; i < size; i++) {
-        bytes[i] = (char) rand_int(255);
+        bytes.push_back((char) rand_int(256));
     }
 
     return bytes;
