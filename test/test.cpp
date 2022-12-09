@@ -179,7 +179,7 @@ void test_crypto() {
  */
 void test_server_serve() {
     // Create server
-    TestServer<int, string> s(max_clients, 0, 0, 0);
+    TestServer<int, string> s(0, 0, 0);
     assert(!s.is_serving());
 
     // Start server
@@ -209,7 +209,7 @@ void test_server_serve() {
  */
 void test_addresses() {
     // Create server
-    TestServer<int, string> s(max_clients, 0, 1, 1);
+    TestServer<int, string> s(0, 1, 1);
     assert(!s.is_serving());
     s.start();
     assert(s.is_serving());
@@ -274,7 +274,7 @@ void test_addresses() {
  */
 void test_send_receive() {
     // Create server
-    TestServer<string, string> s(max_clients, 1, 1, 1);
+    TestServer<string, string> s(1, 1, 1);
     s.start();
     string server_host = s.get_host();
     uint16_t server_port = s.get_port();
@@ -326,7 +326,7 @@ void test_send_receive() {
  */
 void test_send_large_messages() {
     // Create server
-    TestServer<vector<char>, vector<char>> s(max_clients, 1, 1, 1);
+    TestServer<vector<char>, vector<char>> s(1, 1, 1);
     s.start();
     string server_host = s.get_host();
     uint16_t server_port = s.get_port();
@@ -394,7 +394,7 @@ void test_sending_numerous_messages() {
     for (size_t i = 0; i < num_client_messages; i++) client_messages.push_back(rand());
 
     // Create server
-    TestServer<int, int> s(max_clients, num_server_messages, 1, 1);
+    TestServer<int, int> s(num_server_messages, 1, 1);
     s.start();
     string server_host = s.get_host();
     uint16_t server_port = s.get_port();
@@ -450,7 +450,7 @@ void test_sending_numerous_messages() {
  */
 void test_sending_custom_types() {
     // Create server
-    TestServer<Custom, Custom> s(max_clients, 1, 1, 1);
+    TestServer<Custom, Custom> s(1, 1, 1);
     s.start();
     string server_host = s.get_host();
     uint16_t server_port = s.get_port();

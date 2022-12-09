@@ -48,8 +48,8 @@ public:
     vector <size_t> connect_client_ids;
     vector <size_t> disconnect_client_ids;
 
-    TestServer(int max_clients_, int receive_count_, int connect_count_, int disconnect_count_)
-            : cppdtp::Server<S, R>(max_clients_),
+    TestServer(int receive_count_, int connect_count_, int disconnect_count_)
+            : cppdtp::Server<S, R>(),
               receive_count(receive_count_), connect_count(connect_count_), disconnect_count(disconnect_count_) {}
 
     bool events_done() {

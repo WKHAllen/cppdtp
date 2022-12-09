@@ -13,6 +13,8 @@
 
 #include <string>
 #include <thread>
+#include <map>
+#include <iterator>
 #include <utility>
 
 namespace cppdtp {
@@ -39,59 +41,25 @@ namespace cppdtp {
         // The maximum number of clients the server can serve at once.
         size_t max_clients;
 
-        // The number of clients currently being served.
-        size_t num_clients = 0;
-
         // The server socket.
         _Socket sock;
 
         // The client sockets.
-        _Socket *clients = new _Socket[1];
+        std::map<size_t, _Socket> clients;
 
-        // An array noting the client slots that are being used.
-        bool *allocated_clients = new bool[1];
+        // The next available client ID.
+        size_t next_client_id = 0;
 
         // The thread from which the server will serve clients.
-        std::thread *serve_thread;
+        std::thread serve_thread;
 
         /**
          * Get a new client ID.
          *
          * @return The next available client ID.
          */
-        size_t next_client_id() {
-            if (num_clients >= max_clients) {
-                return CPPDTP_SERVER_MAX_CLIENTS_REACHED;
-            }
-
-            for (size_t i = 0; i < max_clients; i++) {
-                if (!allocated_clients[i]) {
-                    return i;
-                }
-            }
-
-            return CPPDTP_SERVER_MAX_CLIENTS_REACHED;
-        }
-
-        /**
-         * Send a status message to a client.
-         *
-         * @param client_sock The socket of the client to send the status to.
-         * @param status_code The status code to send.
-         */
-#ifdef _WIN32
-        void send_status(SOCKET client_sock, int status_code)
-#else
-
-        void send_status(int client_sock, int status_code)
-#endif
-        {
-            std::vector<char> message = _construct_message(&status_code);
-            const char *message_buffer = message.data();
-
-            if (::send(client_sock, message_buffer, message.size(), 0) < 0) {
-                throw CPPDTPException(CPPDTP_STATUS_SEND_FAILED, "failed to send status code to client");
-            }
+        size_t new_client_id() {
+            return next_client_id++;
         }
 
         /**
@@ -105,16 +73,13 @@ namespace cppdtp {
 #else
             close(clients[client_id].sock);
 #endif
-
-            allocated_clients[client_id] = false;
-            num_clients--;
         }
 
         /**
          * Call the serve method.
          */
         void call_serve() {
-            serve_thread = new std::thread(&cppdtp::Server<S, R>::serve, this);
+            serve_thread = std::thread(&cppdtp::Server<S, R>::serve, this);
         }
 
         /**
@@ -174,28 +139,21 @@ namespace cppdtp {
                 }
                 else {
                     // Put new socket in the client list
-                    size_t new_client_id = next_client_id();
+                    size_t client_id = new_client_id();
 
-                    if (new_client_id != CPPDTP_SERVER_MAX_CLIENTS_REACHED) {
-                        // Set non-blocking
-                        mode = 1;
+                    // Set non-blocking
+                    mode = 1;
 
-                        if (ioctlsocket(sock.sock, FIONBIO, &mode) != 0) {
-                            throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, "failed to accept client socket");
-                        }
-
-                        // Add the new socket to the client array
-                        clients[new_client_id].sock = new_sock;
-                        clients[new_client_id].address = address;
-                        allocated_clients[new_client_id] = true;
-                        num_clients++;
-                        send_status(new_sock, CPPDTP_SUCCESS);
-                        call_on_connect(new_client_id);
-                    } else {
-                        // Tell the client that the server is full
-                        send_status(new_sock, CPPDTP_SERVER_FULL);
-                        closesocket(new_sock);
+                    if (ioctlsocket(new_sock, FIONBIO, &mode) != 0) {
+                        throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, "failed to accept client socket");
                     }
+
+                    // Add the new socket to the client map
+                    _Socket new_client;
+                    new_client.sock = new_sock;
+                    new_client.address = address;
+                    clients.insert(std::pair<size_t, _Socket>(client_id, new_client));
+                    call_on_connect(client_id);
                 }
 #else
                 if (new_sock < 0) {
@@ -205,8 +163,7 @@ namespace cppdtp {
                         // No new connections, do nothing
                     }
                     else if (err_code != ENOTSOCK || serving) {
-                        throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, err_code,
-                                              "failed to accept client socket");
+                        throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, err_code, "failed to accept client socket");
                     }
                     else {
                         return;
@@ -214,133 +171,158 @@ namespace cppdtp {
                 }
                 else {
                     // Set non-blocking
-                    if (fcntl(sock.sock, F_SETFL, fcntl(sock.sock, F_GETFL, 0) | O_NONBLOCK) == -1) {
+                    if (fcntl(new_sock, F_SETFL, fcntl(new_sock, F_GETFL, 0) | O_NONBLOCK) == -1) {
                         throw CPPDTPException(CPPDTP_SOCKET_ACCEPT_FAILED, "failed to accept client socket");
                     }
 
                     // Put new socket in the client list
-                    size_t new_client_id = next_client_id();
+                    size_t client_id = new_client_id();
 
-                    if (new_client_id != CPPDTP_SERVER_MAX_CLIENTS_REACHED) {
-                        // Add the new socket to the client array
-                        clients[new_client_id].sock = new_sock;
-                        clients[new_client_id].address = address;
-                        allocated_clients[new_client_id] = true;
-                        num_clients++;
-                        send_status(new_sock, CPPDTP_SUCCESS);
-                        call_on_connect(new_client_id);
-                    } else {
-                        // Tell the client that the server is full
-                        send_status(new_sock, CPPDTP_SERVER_FULL);
-                        close(new_sock);
-                    }
+                    // Add the new socket to the client map
+                    _Socket new_client;
+                    new_client.sock = new_sock;
+                    new_client.address = address;
+                    clients.insert(std::pair<size_t, _Socket>(client_id, new_client));
+                    call_on_connect(client_id);
                 }
 #endif
 
-                // Check if something happened on one of the client sockets
-                for (size_t i = 0; i < max_clients; i++) {
-                    if (allocated_clients[i]) {
+                // Check for messages from client sockets
+                for (std::map<size_t, _Socket>::iterator entry = clients.begin(); entry != clients.end(); ) {
+                    size_t client_id = entry->first;
+                    _Socket client_sock = entry->second;
+                    bool do_next_entry = true;
+
 #ifdef _WIN32
-                        recv_code = recv(clients[i].sock, size_buffer, CPPDTP_LENSIZE, 0);
+                    recv_code = recv(client_sock.sock, size_buffer, CPPDTP_LENSIZE, 0);
+
+                    if (recv_code == SOCKET_ERROR) {
+                        int err_code = WSAGetLastError();
+
+                        if (err_code == WSAECONNRESET || err_code == WSAENOTSOCK) {
+                            disconnect_sock(client_id);
+                            call_on_disconnect(client_id);
+                            clients.erase(entry++);
+                            do_next_entry = false;
+                        }
+                        else if (err_code == WSAEWOULDBLOCK) {
+                            // Nothing happened on the socket, do nothing
+                        }
+                        else {
+                            throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, err_code, "failed to receive data from client");
+                        }
+                    }
+                    else if (recv_code == 0) {
+                        disconnect_sock(client_id);
+                        call_on_disconnect(client_id);
+                        clients.erase(entry++);
+                        do_next_entry = false;
+                    }
+                    else {
+                        std::vector<char> size_buffer_vec(size_buffer, size_buffer + CPPDTP_LENSIZE);
+                        size_t msg_size = _decode_message_size(size_buffer_vec);
+                        std::vector<char> buffer_vec;
+                        buffer_vec.reserve(msg_size);
+                        char *buffer = buffer_vec.data();
+
+                        // Wait in case the message is sent in multiple chunks
+                        sleep(0.01);
+
+                        recv_code = recv(client_sock.sock, buffer, msg_size, 0);
 
                         if (recv_code == SOCKET_ERROR) {
                             int err_code = WSAGetLastError();
 
-                            if (err_code == WSAECONNRESET) {
-                                disconnect_sock(i);
-                                call_on_disconnect(i);
-                            }
-                            else if (err_code == WSAEWOULDBLOCK) {
-                                // Nothing happened on the socket, do nothing
+                            if (err_code == WSAECONNRESET || err_code == WSAENOTSOCK) {
+                                disconnect_sock(client_id);
+                                call_on_disconnect(client_id);
+                                clients.erase(entry++);
+                                do_next_entry = false;
                             }
                             else {
                                 throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, err_code, "failed to receive data from client");
                             }
                         }
                         else if (recv_code == 0) {
-                            disconnect_sock(i);
-                            call_on_disconnect(i);
+                            disconnect_sock(client_id);
+                            call_on_disconnect(client_id);
+                            clients.erase(entry++);
+                            do_next_entry = false;
+                        }
+                        else if (((size_t)recv_code) != msg_size) {
+                            throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, "failed to receive data from client");
                         }
                         else {
-                            std::vector<char> size_buffer_vec(size_buffer, size_buffer + CPPDTP_LENSIZE);
-                            size_t msg_size = _decode_message_size(size_buffer_vec);
-                            std::vector<char> buffer_vec;
-                            buffer_vec.reserve(msg_size);
-                            char *buffer = buffer_vec.data();
-
-                            // Wait in case the message is sent in multiple chunks
-                            sleep(0.01);
-
-                            recv_code = recv(clients[i].sock, buffer, msg_size, 0);
-
-                            if (recv_code == SOCKET_ERROR) {
-                                int err_code = WSAGetLastError();
-
-                                if (err_code == WSAECONNRESET) {
-                                    disconnect_sock(i);
-                                    call_on_disconnect(i);
-                                }
-                                else {
-                                    throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, err_code, "failed to receive data from client");
-                                }
-                            }
-                            else if (recv_code == 0) {
-                                disconnect_sock(i);
-                                call_on_disconnect(i);
-                            }
-                            else if (((size_t)recv_code) != msg_size) {
-                                throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, "failed to receive data from client");
-                            }
-                            else {
-                                std::vector<char> data_vec(buffer, buffer + msg_size);
-                                call_on_receive(i, data_vec);
-                            }
+                            std::vector<char> data_vec(buffer, buffer + msg_size);
+                            call_on_receive(client_id, data_vec);
                         }
+                    }
 #else
-                        recv_code = read(clients[i].sock, size_buffer, CPPDTP_LENSIZE);
+                    recv_code = read(client_sock.sock, size_buffer, CPPDTP_LENSIZE);
 
-                        if (recv_code == 0) {
-                            disconnect_sock(i);
-                            call_on_disconnect(i);
+                    if (recv_code == 0) {
+                        disconnect_sock(client_id);
+                        call_on_disconnect(client_id);
+                        clients.erase(entry++);
+                        do_next_entry = false;
+                    }
+                    else if (recv_code == -1) {
+                        int err_code = errno;
+
+                        if (err_code == EBADF) {
+                            disconnect_sock(client_id);
+                            call_on_disconnect(client_id);
+                            clients.erase(entry++);
+                            do_next_entry = false;
                         }
-                        else if (recv_code == -1) {
+                        else if (err_code == EAGAIN || err_code == EWOULDBLOCK) {
+                            // Nothing happened on the socket, do nothing
+                        }
+                        else {
+                            throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, err_code, "failed to receive data from client");
+                        }
+                    }
+                    else {
+                        std::vector<char> size_buffer_vec(size_buffer, size_buffer + CPPDTP_LENSIZE);
+                        size_t msg_size = _decode_message_size(size_buffer_vec);
+                        std::vector<char> buffer_vec;
+                        buffer_vec.reserve(msg_size);
+                        char *buffer = buffer_vec.data();
+
+                        // Wait in case the message is sent in multiple chunks
+                        sleep(0.01);
+
+                        recv_code = read(client_sock.sock, buffer, msg_size);
+
+                        if (recv_code == -1) {
                             int err_code = errno;
 
-                            if (err_code == EAGAIN || err_code == EWOULDBLOCK) {
-                                // Nothing happened on the socket, do nothing
+                            if (err_code == EBADF) {
+                                disconnect_sock(client_id);
+                                call_on_disconnect(client_id);
+                                clients.erase(entry++);
+                                do_next_entry = false;
+                            } else {
+                                throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, "failed to receive data from client");
                             }
-                            else {
-                                throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, err_code, "failed to receive data from client");
-                            }
+                        }
+                        else if (recv_code == 0) {
+                            disconnect_sock(client_id);
+                            call_on_disconnect(client_id);
+                            clients.erase(entry++);
+                            do_next_entry = false;
+                        }
+                        else if (((size_t)recv_code) != msg_size) {
+                            throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, "failed to receive data from client");
                         }
                         else {
-                            std::vector<char> size_buffer_vec(size_buffer, size_buffer + CPPDTP_LENSIZE);
-                            size_t msg_size = _decode_message_size(size_buffer_vec);
-                            std::vector<char> buffer_vec;
-                            buffer_vec.reserve(msg_size);
-                            char *buffer = buffer_vec.data();
-
-                            // Wait in case the message is sent in multiple chunks
-                            sleep(0.01);
-
-                            recv_code = read(clients[i].sock, buffer, msg_size);
-
-                            if (recv_code == -1) {
-                                throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, "failed to receive data from client");
-                            }
-                            else if (recv_code == 0) {
-                                disconnect_sock(i);
-                                call_on_disconnect(i);
-                            }
-                            else if (((size_t)recv_code) != msg_size) {
-                                throw CPPDTPException(CPPDTP_SERVER_RECV_FAILED, "failed to receive data from client");
-                            }
-                            else {
-                                std::vector<char> data_vec(buffer, buffer + msg_size);
-                                call_on_receive(i, data_vec);
-                            }
+                            std::vector<char> data_vec(buffer, buffer + msg_size);
+                            call_on_receive(client_id, data_vec);
                         }
+                    }
 #endif
+                    if (do_next_entry) {
+                        ++entry;
                     }
                 }
             }
@@ -404,18 +386,8 @@ namespace cppdtp {
     public:
         /**
          * Instantiate a socket server.
-         *
-         * @param max_clients_ The maximum number of clients the server can serve at once.
          */
-        Server(size_t max_clients_) {
-            max_clients = max_clients_;
-
-            delete[] clients;
-            delete[] allocated_clients;
-
-            clients = new _Socket[max_clients];
-            allocated_clients = new bool[max_clients]{false};
-
+        Server() {
             // Initialize the library
             if (!_cppdtp_init_status) {
                 int return_code = _cppdtp_init();
@@ -453,10 +425,6 @@ namespace cppdtp {
         ~Server() {
             if (serving) {
                 stop();
-
-                delete[] clients;
-                delete[] allocated_clients;
-                delete serve_thread;
             }
         }
 
@@ -553,11 +521,11 @@ namespace cppdtp {
 
 #ifdef _WIN32
             // Close sockets
-            for (size_t i = 0; i < max_clients; i++) {
-                if (allocated_clients[i]) {
-                    if (closesocket(clients[i].sock) != 0) {
-                        throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED, "server failed to close client sockets");
-                    }
+            for (std::map<size_t, _Socket>::iterator entry = clients.begin(); entry != clients.end(); ++entry) {
+                _Socket client_sock = entry->second;
+
+                if (closesocket(client_sock.sock) != 0) {
+                    throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED, "server failed to close client sockets");
                 }
             }
 
@@ -566,11 +534,11 @@ namespace cppdtp {
             }
 #else
             // Close sockets
-            for (size_t i = 0; i < max_clients; i++) {
-                if (allocated_clients[i]) {
-                    if (close(clients[i].sock) != 0) {
-                        throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED, "server failed to close client sockets");
-                    }
+            for (std::map<size_t, _Socket>::iterator entry = clients.begin(); entry != clients.end(); ++entry) {
+                _Socket client_sock = entry->second;
+
+                if (close(client_sock.sock) != 0) {
+                    throw CPPDTPException(CPPDTP_SERVER_STOP_FAILED, "server failed to close client sockets");
                 }
             }
 
@@ -579,8 +547,10 @@ namespace cppdtp {
             }
 #endif
 
-            if (serve_thread->joinable()) {
-                serve_thread->join();
+            clients.clear();
+
+            if (serve_thread.joinable()) {
+                serve_thread.join();
             }
         }
 
@@ -683,7 +653,7 @@ namespace cppdtp {
             }
 
             // Make sure the client exists
-            if (client_id >= max_clients || !allocated_clients[client_id]) {
+            if (clients.count(client_id) == 0) {
                 throw CPPDTPException(CPPDTP_CLIENT_DOES_NOT_EXIST, 0, "client does not exist");
             }
 
@@ -742,7 +712,7 @@ namespace cppdtp {
             }
 
             // Make sure the client exists
-            if (client_id >= max_clients || !allocated_clients[client_id]) {
+            if (clients.count(client_id) == 0) {
                 throw CPPDTPException(CPPDTP_CLIENT_DOES_NOT_EXIST, 0, "client does not exist");
             }
 
@@ -771,7 +741,7 @@ namespace cppdtp {
             }
 
             // Make sure the client exists
-            if (client_id >= max_clients || !allocated_clients[client_id]) {
+            if (clients.count(client_id) == 0) {
                 throw CPPDTPException(CPPDTP_CLIENT_DOES_NOT_EXIST, 0, "client does not exist");
             }
 
@@ -784,8 +754,6 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_CLIENT_REMOVE_FAILED, "failed to remove client from server");
             }
 #endif
-
-            allocated_clients[client_id] = false;
         }
 
         /**
@@ -798,6 +766,11 @@ namespace cppdtp {
             // Make sure the server is running
             if (!serving) {
                 throw CPPDTPException(CPPDTP_SERVER_NOT_SERVING, 0, "server is not serving");
+            }
+
+            // Make sure the client exists
+            if (clients.count(client_id) == 0) {
+                throw CPPDTPException(CPPDTP_CLIENT_DOES_NOT_EXIST, 0, "client does not exist");
             }
 
             std::vector<char> message = _construct_message(data);
@@ -822,11 +795,11 @@ namespace cppdtp {
             std::vector<char> message = _construct_message(data);
             const char *message_buffer = message.data();
 
-            for (size_t i = 0; i < max_clients; i++) {
-                if (allocated_clients[i]) {
-                    if (::send(clients[i].sock, message_buffer, message.size(), 0) < 0) {
-                        throw CPPDTPException(CPPDTP_SERVER_SEND_FAILED, "failed to send data to client");
-                    }
+            for (std::map<size_t, _Socket>::iterator entry = clients.begin(); entry != clients.end(); ++entry) {
+                _Socket client_sock = entry->second;
+
+                if (::send(client_sock.sock, message_buffer, message.size(), 0) < 0) {
+                    throw CPPDTPException(CPPDTP_SERVER_SEND_FAILED, "failed to send data to client");
                 }
             }
         }
