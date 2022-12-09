@@ -159,7 +159,7 @@ namespace cppdtp {
                 if (new_sock < 0) {
                     int err_code = errno;
 
-                    if (err_code == EAGAIN || err_code == EWOULDBLOCK) {
+                    if (CPPDTP_EAGAIN_OR_WOULDBLOCK(err_code)) {
                         // No new connections, do nothing
                     }
                     else if (err_code != ENOTSOCK || serving) {
@@ -275,7 +275,7 @@ namespace cppdtp {
                             clients.erase(entry++);
                             do_next_entry = false;
                         }
-                        else if (err_code == EAGAIN || err_code == EWOULDBLOCK) {
+                        else if (CPPDTP_EAGAIN_OR_WOULDBLOCK(err_code)) {
                             // Nothing happened on the socket, do nothing
                         }
                         else {

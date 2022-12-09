@@ -104,8 +104,15 @@
 // Length of the size portion of each message
 #define CPPDTP_LENSIZE 5
 
-// Server max clients indicator
-#define CPPDTP_SERVER_MAX_CLIENTS_REACHED UINT64_MAX
+// Determine if a blocking error has occurred
+// This is necessary because -Wlogical-op causes a compile-time error on machines where EAGAIN and EWOULDBLOCK are equal
+#ifndef _WIN32
+#  if EAGAIN == EWOULDBLOCK
+#    define CPPDTP_EAGAIN_OR_WOULDBLOCK(e) (e == EAGAIN)
+#  else
+#    define CPPDTP_EAGAIN_OR_WOULDBLOCK(e) (e == EAGAIN || e == EWOULDBLOCK)
+#  endif
+#endif
 
 namespace cppdtp {
 

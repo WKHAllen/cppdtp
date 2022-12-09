@@ -158,7 +158,7 @@ namespace cppdtp {
                 else if (recv_code == -1) {
                     int err_code = errno;
 
-                    if (err_code == EAGAIN || err_code == EWOULDBLOCK) {
+                    if (CPPDTP_EAGAIN_OR_WOULDBLOCK(err_code)) {
                         // Nothing happened on the socket, do nothing
                     }
                     else {
