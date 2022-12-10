@@ -550,7 +550,11 @@ namespace cppdtp {
             clients.clear();
 
             if (serve_thread.joinable()) {
-                serve_thread.join();
+                if (serve_thread.get_id() != std::this_thread::get_id()) {
+                    serve_thread.join();
+                } else {
+                    serve_thread.detach();
+                }
             }
         }
 

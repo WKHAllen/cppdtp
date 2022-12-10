@@ -513,27 +513,276 @@ void test_sending_custom_types() {
 /**
  * Test having multiple clients connected.
  */
-void test_multiple_clients() {}
+void test_multiple_clients() {
+    // Messages
+    string message_from_client1 = "Hello from client #1!";
+    string message_from_client2 = "Goodbye from client #2!";
+    size_t message_from_server = 29275;
+
+    // Create server
+    TestServer<size_t, string> s(2, 2, 2);
+    s.reply_with_string_length = true;
+    s.start();
+    string server_host = s.get_host();
+    uint16_t server_port = s.get_port();
+    cout << "Server address: " << server_host << ":" << server_port << endl;
+    cppdtp::sleep(wait_time);
+
+    // Create client 1
+    TestClient<string, size_t> c1(2, 0);
+    c1.connect();
+    cppdtp::sleep(wait_time);
+
+    // Check client 1 address info
+    cout << "Client #1 (according to client #1): " << c1.get_host() << ":" << c1.get_port() << endl;
+    cout << "Client #1 (according to server):    " << s.get_client_host(0) << ":" << s.get_client_port(0) << endl;
+    assert(c1.get_host() == s.get_client_host(0));
+    assert(c1.get_port() == s.get_client_port(0));
+
+    // Create client 2
+    TestClient<string, size_t> c2(2, 0);
+    c2.connect();
+    cppdtp::sleep(wait_time);
+
+    // Check client 2 address info
+    cout << "Client #2 (according to client #2): " << c2.get_host() << ":" << c2.get_port() << endl;
+    cout << "Client #2 (according to server):    " << s.get_client_host(1) << ":" << s.get_client_port(1) << endl;
+    assert(c2.get_host() == s.get_client_host(1));
+    assert(c2.get_port() == s.get_client_port(1));
+
+    // Send message from client 1
+    c1.send(message_from_client1);
+    cppdtp::sleep(wait_time);
+
+    // Send message from client 2
+    c2.send(message_from_client2);
+    cppdtp::sleep(wait_time);
+
+    // Send message to all clients
+    s.send_all(message_from_server);
+    cppdtp::sleep(wait_time);
+
+    // Disconnect client 1
+    c1.disconnect();
+    cppdtp::sleep(wait_time);
+
+    // Disconnect client 2
+    c2.disconnect();
+    cppdtp::sleep(wait_time);
+
+    // Stop server
+    s.stop();
+    cppdtp::sleep(wait_time);
+
+    // Check event counts
+    assert_equal(s.receive_count, 0);
+    assert_equal(s.connect_count, 0);
+    assert_equal(s.disconnect_count, 0);
+    assert(s.events_done());
+    vector <string> s_received = {message_from_client1, message_from_client2};
+    vector <size_t> s_received_ids = {0, 1};
+    vector <size_t> s_connect_ids = {0, 1};
+    vector <size_t> s_disconnect_ids = {0, 1};
+    assert_arrays_equal(s.received, s_received);
+    assert_arrays_equal(s.received_client_ids, s_received_ids);
+    assert_arrays_equal(s.connect_client_ids, s_connect_ids);
+    assert_arrays_equal(s.disconnect_client_ids, s_disconnect_ids);
+    assert_equal(c1.receive_count, 0);
+    assert_equal(c1.disconnected_count, 0);
+    assert(c1.events_done());
+    vector <size_t> c1_received = {message_from_client1.length(), message_from_server};
+    assert_arrays_equal(c1.received, c1_received);
+    assert_equal(c2.receive_count, 0);
+    assert_equal(c2.disconnected_count, 0);
+    assert(c2.events_done());
+    vector <size_t> c2_received = {message_from_client2.length(), message_from_server};
+    assert_arrays_equal(c2.received, c2_received);
+}
 
 /**
  * Test clients disconnecting from the server.
  */
-void test_client_disconnected() {}
+void test_client_disconnected() {
+    // Create server
+    TestServer<int, string> s(0, 1, 0);
+    assert(!s.is_serving());
+    s.start();
+    assert(s.is_serving());
+    string server_host = s.get_host();
+    uint16_t server_port = s.get_port();
+    cout << "Server address: " << server_host << ":" << server_port << endl;
+    cppdtp::sleep(wait_time);
+
+    // Create client
+    TestClient<string, int> c(0, 1);
+    assert(!c.is_connected());
+    c.connect();
+    assert(c.is_connected());
+    cppdtp::sleep(wait_time);
+
+    // Stop server
+    assert(s.is_serving());
+    assert(c.is_connected());
+    s.stop();
+    assert(!s.is_serving());
+    cppdtp::sleep(wait_time);
+    assert(!c.is_connected());
+
+    // Check event counts
+    assert_equal(s.receive_count, 0);
+    assert_equal(s.connect_count, 0);
+    assert_equal(s.disconnect_count, 0);
+    assert(s.events_done());
+    vector <string> s_received = {};
+    vector <size_t> s_received_ids = {};
+    vector <size_t> s_connect_ids = {0};
+    vector <size_t> s_disconnect_ids = {};
+    assert_arrays_equal(s.received, s_received);
+    assert_arrays_equal(s.received_client_ids, s_received_ids);
+    assert_arrays_equal(s.connect_client_ids, s_connect_ids);
+    assert_arrays_equal(s.disconnect_client_ids, s_disconnect_ids);
+    assert_equal(c.receive_count, 0);
+    assert_equal(c.disconnected_count, 0);
+    assert(c.events_done());
+    vector <int> c_received = {};
+    assert_arrays_equal(c.received, c_received);
+}
 
 /**
  * Test removing a client from the server.
  */
-void test_remove_client() {}
+void test_remove_client() {
+    // Create server
+    TestServer<int, string> s(0, 1, 1);
+    assert(!s.is_serving());
+    s.start();
+    assert(s.is_serving());
+    string server_host = s.get_host();
+    uint16_t server_port = s.get_port();
+    cout << "Server address: " << server_host << ":" << server_port << endl;
+    cppdtp::sleep(wait_time);
 
-/**
- * Test stopping a server while a client is connected.
- */
-void test_stop_server_while_client_connected() {}
+    // Create client
+    TestClient<string, int> c(0, 1);
+    assert(!c.is_connected());
+    c.connect();
+    assert(c.is_connected());
+    cppdtp::sleep(wait_time);
+
+    // Disconnect the client
+    assert(c.is_connected());
+    s.remove_client(0);
+    cppdtp::sleep(wait_time);
+    assert(!c.is_connected());
+
+    // Check event counts
+    assert_equal(s.receive_count, 0);
+    assert_equal(s.connect_count, 0);
+    assert_equal(s.disconnect_count, 0);
+    assert(s.events_done());
+    vector <string> s_received = {};
+    vector <size_t> s_received_ids = {};
+    vector <size_t> s_connect_ids = {0};
+    vector <size_t> s_disconnect_ids = {0};
+    assert_arrays_equal(s.received, s_received);
+    assert_arrays_equal(s.received_client_ids, s_received_ids);
+    assert_arrays_equal(s.connect_client_ids, s_connect_ids);
+    assert_arrays_equal(s.disconnect_client_ids, s_disconnect_ids);
+    assert_equal(c.receive_count, 0);
+    assert_equal(c.disconnected_count, 0);
+    assert(c.events_done());
+    vector <int> c_received = {};
+    assert_arrays_equal(c.received, c_received);
+}
 
 /**
  * Test address defaults.
  */
-void test_server_client_address_defaults() {}
+void test_server_client_address_defaults() {
+    // Create server
+    TestServer<int, string> s1(0, 1, 1);
+    s1.start();
+    string server_host1 = s1.get_host();
+    uint16_t server_port1 = s1.get_port();
+    cout << "Server address: " << server_host1 << ":" << server_port1 << endl;
+    cppdtp::sleep(wait_time);
+
+    // Create client
+    TestClient<string, int> c1(0, 0);
+    c1.connect();
+    cppdtp::sleep(wait_time);
+
+    // Disconnect client
+    c1.disconnect();
+    cppdtp::sleep(wait_time);
+
+    // Stop server
+    s1.stop();
+    cppdtp::sleep(wait_time);
+
+    // Create server with host
+    TestServer<int, string> s2(0, 1, 1);
+    s2.start("127.0.0.1");
+    string server_host2 = s2.get_host();
+    uint16_t server_port2 = s2.get_port();
+    cout << "Server address: " << server_host2 << ":" << server_port2 << endl;
+    cppdtp::sleep(wait_time);
+
+    // Create client with host
+    TestClient<string, int> c2(0, 0);
+    c2.connect(server_host2);
+    cppdtp::sleep(wait_time);
+
+    // Disconnect client
+    c2.disconnect();
+    cppdtp::sleep(wait_time);
+
+    // Stop server
+    s2.stop();
+    cppdtp::sleep(wait_time);
+
+    // Create server with port
+    TestServer<int, string> s3(0, 1, 1);
+    s3.start(35792);
+    string server_host3 = s3.get_host();
+    uint16_t server_port3 = s3.get_port();
+    cout << "Server address: " << server_host3 << ":" << server_port3 << endl;
+    cppdtp::sleep(wait_time);
+
+    // Create client with port
+    TestClient<string, int> c3(0, 0);
+    c3.connect(server_port3);
+    cppdtp::sleep(wait_time);
+
+    // Disconnect client
+    c3.disconnect();
+    cppdtp::sleep(wait_time);
+
+    // Stop server
+    s3.stop();
+    cppdtp::sleep(wait_time);
+
+    // Create server with host and port
+    TestServer<int, string> s4(0, 1, 1);
+    s4.start("127.0.0.1", 35792);
+    string server_host4 = s4.get_host();
+    uint16_t server_port4 = s4.get_port();
+    cout << "Server address: " << server_host4 << ":" << server_port4 << endl;
+    cppdtp::sleep(wait_time);
+
+    // Create client with host and port
+    TestClient<string, int> c4(0, 0);
+    c4.connect(server_host4, server_port4);
+    cppdtp::sleep(wait_time);
+
+    // Disconnect client
+    c4.disconnect();
+    cppdtp::sleep(wait_time);
+
+    // Stop server
+    s4.stop();
+    cppdtp::sleep(wait_time);
+}
 
 int main() {
     cout << "Beginning tests" << endl;
@@ -563,110 +812,9 @@ int main() {
     test_client_disconnected();
     cout << endl << "Testing removing clients..." << endl;
     test_remove_client();
-    cout << endl << "Testing stopping the server with the client connected..." << endl;
-    test_stop_server_while_client_connected();
     cout << endl << "Testing address defaults..." << endl;
     test_server_client_address_defaults();
 
     // Done
     cout << endl << "Completed tests" << endl;
 }
-
-//int main() {
-//    srand(time(NULL));
-//
-//    // Generate large random messages
-//    size_t random_message_to_server_len = rand_int(32768, 65535);
-//    size_t random_message_to_client_len = rand_int(65536, 82175); // fails on Linux at values >= 82176?
-//    char *random_message_to_server = rand_bytes(random_message_to_server_len);
-//    char *random_message_to_client = rand_bytes(random_message_to_client_len);
-//    cout << "Large random message sizes: " << random_message_to_server_len << ", " << random_message_to_client_len
-//         << endl;
-//
-//    // Begin testing
-//    cout << "Running tests..." << endl;
-//
-//    // Start server
-//    string host = "127.0.0.1";
-//    TestServer server(16);
-//    server.random_message_len = random_message_to_server_len;
-//    server.random_message = random_message_to_server;
-//    server.start(host);
-//
-//    // Get IP address and port
-//    string ip_address = server.get_host();
-//    uint16_t port = server.get_port();
-//    cout << "IP address: " << ip_address << endl;
-//    cout << "Port:       " << port << endl;
-//
-//    // Test that the client does not exist
-//    try {
-//        server.remove_client(0);
-//        cout << "Did not throw on removal of unknown client" << endl;
-//        assert(false);
-//    }
-//    catch (cppdtp::CPPDTPException &e) {
-//        cout << "Throws on removal of unknown client: '" << e.what() << "'" << endl;
-//        assert(e.error_code() == CPPDTP_CLIENT_DOES_NOT_EXIST);
-//        assert(e.underlying_error_code() == 0);
-//    }
-//
-//    cppdtp::sleep(wait_time);
-//
-//    // Start client
-//    TestClient client;
-//    client.random_message_len = random_message_to_client_len;
-//    client.random_message = random_message_to_client;
-//    client.connect(ip_address);
-//
-//    // Get IP address and port
-//    string client_ip_address = client.get_host();
-//    uint16_t client_port = client.get_port();
-//    cout << "IP address: " << client_ip_address << endl;
-//    cout << "Port:       " << client_port << endl;
-//
-//    cppdtp::sleep(wait_time);
-//
-//    // Client send
-//    string client_message = "Hello, server.";
-//    client.send((void *) (&client_message[0]), client_message.size() + 1);
-//
-//    cppdtp::sleep(wait_time);
-//
-//    // Server send
-//    string server_message = "Hello, client #0.";
-//    server.send(0, (void *) (&server_message[0]), server_message.size() + 1);
-//
-//    cppdtp::sleep(wait_time);
-//
-//    server.receiving_random_message = true;
-//    client.receiving_random_message = true;
-//
-//    // Client send large message
-//    client.send((void *) random_message_to_server, random_message_to_server_len);
-//
-//    cppdtp::sleep(wait_time);
-//
-//    // Server send large message
-//    server.send_all((void *) random_message_to_client, random_message_to_client_len);
-//
-//    cppdtp::sleep(wait_time);
-//
-//    server.receiving_random_message = false;
-//    client.receiving_random_message = false;
-//
-//    // Client disconnect
-//    client.disconnect();
-//
-//    cppdtp::sleep(wait_time);
-//
-//    // Server stop
-//    server.stop();
-//
-//    delete[] random_message_to_server;
-//    delete[] random_message_to_client;
-//
-//    // Done
-//    cout << "Successfully passed all tests" << endl;
-//    return 0;
-//}

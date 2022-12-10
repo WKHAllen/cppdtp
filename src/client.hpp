@@ -41,13 +41,13 @@ namespace cppdtp {
         _Socket sock;
 
         // The thread from which the client will await messages from the server.
-        std::thread *handle_thread;
+        std::thread handle_thread;
 
         /**
          * Call the handle method.
          */
         void call_handle() {
-            handle_thread = new std::thread(&cppdtp::Client<S, R>::handle, this);
+            handle_thread = std::thread(&cppdtp::Client<S, R>::handle, this);
         }
 
         /**
@@ -264,8 +264,6 @@ namespace cppdtp {
         ~Client() {
             if (connected) {
                 disconnect();
-
-                delete handle_thread;
             }
         }
 
@@ -366,8 +364,12 @@ namespace cppdtp {
             }
 #endif
 
-            if (handle_thread->joinable()) {
-                handle_thread->join();
+            if (handle_thread.joinable()) {
+                if (handle_thread.get_id() != std::this_thread::get_id()) {
+                    handle_thread.join();
+                } else {
+                    handle_thread.detach();
+                }
             }
         }
 
