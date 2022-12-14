@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <cstring>
 #include <utility>
+#include <vector>
 
 using namespace std;
 

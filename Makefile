@@ -13,12 +13,14 @@ BUILD_FLAGS = \
 	-fno-omit-frame-pointer -ffloat-store -fno-common
 
 ifeq ($(OS),Windows_NT)
-	LINK_FLAGS = -lWs2_32
+	INCLUDE_FLAGS = -I"C:\Program Files\OpenSSL-Win64\include"
+	LINK_FLAGS = -lWs2_32 -L"C:\Program Files\OpenSSL-Win64\bin" -llibcrypto-1_1-x64
 	TEST_BINARY = bin\test
 	POST_BUILD_CMD = cd.
 	CLEAN_CMD = del bin\cppdtp bin\cppdtp.exe bin\test bin\test.exe
 else
-	LINK_FLAGS = -lpthread -lm
+	INCLUDE_FLAGS =
+	LINK_FLAGS = -lpthread -lm -lcrypto
 	TEST_BINARY = ./bin/test
 	POST_BUILD_CMD = chmod +x ./bin/test
 	CLEAN_CMD = rm -f bin/cppdtp bin/cppdtp.exe bin/test bin/test.exe
@@ -30,6 +32,7 @@ build:
 	$(CC) -o bin/test \
 		$(BUILD_FLAGS) \
 		test/*.cpp \
+		$(INCLUDE_FLAGS) \
 		$(LINK_FLAGS) && \
 	$(POST_BUILD_CMD)
 

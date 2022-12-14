@@ -11,6 +11,11 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <time.h>
+#include <vector>
+#include <utility>
+#include <openssl/conf.h>
+#include <openssl/evp.h>
+#include <openssl/err.h>
 
 using namespace std;
 
@@ -171,7 +176,25 @@ void test_util() {
  * Test crypto functions.
  */
 void test_crypto() {
-    // TODO: test crypto functions
+    // Test RSA
+    string rsa_message_str = "Hello, RSA!";
+    vector<char> rsa_message(rsa_message_str.begin(), rsa_message_str.end());
+    pair<vector<char>, vector<char>> keys = cppdtp::_new_rsa_keys();
+    vector<char> public_key = keys.first;
+    vector<char> private_key = keys.second;
+    vector<char> rsa_encrypted = cppdtp::_rsa_encrypt(public_key, rsa_message);
+    vector<char> rsa_decrypted = cppdtp::_rsa_decrypt(private_key, rsa_encrypted);
+    assert(rsa_decrypted == rsa_message);
+    assert(rsa_encrypted != rsa_message);
+
+    // Test AES
+    string aes_message_str = "Hello, AES!";
+    vector<char> aes_message(aes_message_str.begin(), aes_message_str.end());
+    vector<char> key_iv = cppdtp::_new_aes_key_iv();
+    vector<char> aes_encrypted = cppdtp::_aes_encrypt(key_iv, aes_message);
+    vector<char> aes_decrypted = cppdtp::_aes_decrypt(key_iv, aes_encrypted);
+    assert(aes_decrypted == aes_message);
+    assert(aes_encrypted != aes_message);
 }
 
 /**

@@ -7,6 +7,7 @@
 #define CPPDTP_UTIL_HPP
 
 #include <string>
+#include <vector>
 #include <type_traits>
 #include <utility>
 
@@ -68,6 +69,7 @@
 #define CPPDTP_CLIENT_NOT_CONNECTED       30
 #define CPPDTP_CLIENT_SEND_FAILED         31
 #define CPPDTP_CLIENT_RECV_FAILED         32
+#define CPPDTP_OPENSSL_ERROR              33
 
 // Global address family to use
 #ifndef CPPDTP_ADDRESS_FAMILY

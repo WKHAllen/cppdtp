@@ -12,6 +12,7 @@
 #include "exceptions.hpp"
 
 #include <string>
+#include <vector>
 #include <thread>
 #include <memory>
 #include <utility>
