@@ -14,13 +14,13 @@ BUILD_FLAGS = \
 
 ifeq ($(OS),Windows_NT)
 	INCLUDE_FLAGS = -I"C:\Program Files\OpenSSL-Win64\include"
-	LINK_FLAGS = -lWs2_32 -L"C:\Program Files\OpenSSL-Win64\bin" -llibcrypto-1_1-x64
+	LINK_FLAGS = -lWs2_32 -L"C:\Program Files\OpenSSL-Win64\bin" -llibcrypto-3-x64
 	TEST_BINARY = bin\test
 	POST_BUILD_CMD = cd.
 	CLEAN_CMD = del bin\cppdtp bin\cppdtp.exe bin\test bin\test.exe
 else
 	INCLUDE_FLAGS =
-	LINK_FLAGS = -lpthread -lm -lcrypto
+	LINK_FLAGS = -lpthread -lm -l:libcrypto.so.3
 	TEST_BINARY = ./bin/test
 	POST_BUILD_CMD = chmod +x ./bin/test
 	CLEAN_CMD = rm -f bin/cppdtp bin/cppdtp.exe bin/test bin/test.exe

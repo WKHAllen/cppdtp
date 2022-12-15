@@ -42,36 +42,26 @@ namespace cppdtp {
      * @param public_key The public key.
      * @return The OpenSSL representation of the public key.
      */
-    EVP_PKEY *_rsa_public_key_from_bytes(std::vector<char> public_key) {
-        char *pub_key = public_key.data();
+    EVP_PKEY *_rsa_public_key_from_bytes(const std::vector<char> &public_key) {
+        const char *pub_key = public_key.data();
         int pub_len = public_key.size();
 
         BIO *pbkeybio = NULL;
 
-        if ((pbkeybio = BIO_new_mem_buf((void *) pub_key, pub_len)) == NULL) {
+        if ((pbkeybio = BIO_new_mem_buf((const void *) pub_key, pub_len)) == NULL) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(),
                                   "failed to create RSA public key BIO from buffer");
         }
 
-        RSA *pb_rsa = NULL;
+        EVP_PKEY *pb_rsa = NULL;
 
-        if ((pb_rsa = PEM_read_bio_RSAPublicKey(pbkeybio, &pb_rsa, NULL, NULL)) == NULL) {
+        if ((pb_rsa = PEM_read_bio_PUBKEY(pbkeybio, &pb_rsa, NULL, NULL)) == NULL) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to read BIO into RSA public key");
-        }
-
-        EVP_PKEY *evp_pbkey;
-
-        if ((evp_pbkey = EVP_PKEY_new()) == NULL) {
-            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to create public key envelope");
-        }
-
-        if (EVP_PKEY_assign_RSA(evp_pbkey, pb_rsa) == 0) {
-            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to assign RSA public key");
         }
 
         BIO_free(pbkeybio);
 
-        return evp_pbkey;
+        return pb_rsa;
     }
 
     /**
@@ -80,36 +70,26 @@ namespace cppdtp {
      * @param private_key The private key.
      * @return The OpenSSL representation of the private key.
      */
-    EVP_PKEY *_rsa_private_key_from_bytes(std::vector<char> private_key) {
-        char *pri_key = private_key.data();
+    EVP_PKEY *_rsa_private_key_from_bytes(const std::vector<char> &private_key) {
+        const char *pri_key = private_key.data();
         int pri_len = private_key.size();
 
         BIO *prkeybio = NULL;
 
-        if ((prkeybio = BIO_new_mem_buf((void *) pri_key, pri_len)) == NULL) {
+        if ((prkeybio = BIO_new_mem_buf((const void *) pri_key, pri_len)) == NULL) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(),
                                   "failed to create RSA private key BIO from buffer");
         }
 
-        RSA *p_rsa = NULL;
+        EVP_PKEY *p_rsa = NULL;
 
-        if ((p_rsa = PEM_read_bio_RSAPrivateKey(prkeybio, &p_rsa, NULL, NULL)) == NULL) {
+        if ((p_rsa = PEM_read_bio_PrivateKey(prkeybio, &p_rsa, NULL, NULL)) == NULL) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to read BIO into RSA private key");
-        }
-
-        EVP_PKEY *evp_prkey;
-
-        if ((evp_prkey = EVP_PKEY_new()) == NULL) {
-            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to create private key envelope");
-        }
-
-        if (EVP_PKEY_assign_RSA(evp_prkey, p_rsa) == 0) {
-            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to assign RSA private key");
         }
 
         BIO_free(prkeybio);
 
-        return evp_prkey;
+        return p_rsa;
     }
 
     /**
@@ -136,24 +116,10 @@ namespace cppdtp {
      * @return The generated key pair.
      */
     std::pair <std::vector<char>, std::vector<char>> _new_rsa_keys() {
-        BIGNUM *bne;
+        EVP_PKEY *r;
 
-        if ((bne = BN_new()) == NULL) {
-            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed BN allocation");
-        }
-
-        if (BN_set_word(bne, RSA_F4) == 0) {
-            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to set BN word");
-        }
-
-        RSA *r;
-
-        if ((r = RSA_new()) == NULL) {
-            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to allocate RSA structure");
-        }
-
-        if (RSA_generate_key_ex(r, _rsa_key_size, bne, NULL) == 0) {
-            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to generate RSA keys");
+        if ((r = EVP_RSA_gen((unsigned int) _rsa_key_size)) == NULL) {
+            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to generate RSA key pair");
         }
 
         BIO *bp_public;
@@ -163,7 +129,7 @@ namespace cppdtp {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to create BIO for RSA public key");
         }
 
-        if (PEM_write_bio_RSAPublicKey(bp_public, r) == 0) {
+        if (PEM_write_bio_PUBKEY(bp_public, r) == 0) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to write RSA public key");
         }
 
@@ -171,37 +137,30 @@ namespace cppdtp {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to create BIO for RSA private key");
         }
 
-        if (PEM_write_bio_RSAPrivateKey(bp_private, r, NULL, NULL, 0, NULL, NULL) == 0) {
+        if (PEM_write_bio_PrivateKey(bp_private, r, NULL, NULL, 0, NULL, NULL) == 0) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to write RSA private key");
         }
 
-        size_t pri_len = BIO_pending(bp_private);
         size_t pub_len = BIO_pending(bp_public);
-        char *pri_key = new char[pri_len + 1];
-        char *pub_key = new char[pub_len + 1];
+        size_t pri_len = BIO_pending(bp_private);
+        std::vector<char> public_key;
+        public_key.resize(pub_len);
+        std::vector<char> private_key;
+        private_key.resize(pri_len);
 
-        if (BIO_read(bp_private, pri_key, pri_len) < 1) {
-            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to read RSA private key BIO");
-        }
-
-        if (BIO_read(bp_public, pub_key, pub_len) < 1) {
+        if (BIO_read(bp_public, public_key.data(), pub_len) < 1) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to read RSA public key BIO");
         }
 
-        pri_key[pri_len] = '\0';
-        pub_key[pub_len] = '\0';
+        if (BIO_read(bp_private, private_key.data(), pri_len) < 1) {
+            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to read RSA private key BIO");
+        }
 
-        std::vector<char> public_key(pub_key, pub_key + pub_len + 1);
-        std::vector<char> private_key(pri_key, pri_key + pri_len + 1);
-
-        delete[] pri_key;
-        delete[] pub_key;
         BIO_free_all(bp_public);
         BIO_free_all(bp_private);
-        BN_free(bne);
-        RSA_free(r);
+        EVP_PKEY_free(r);
 
-        return std::pair < std::vector < char > , std::vector < char > > (public_key, private_key);
+        return std::pair<std::vector<char>, std::vector<char>>(public_key, private_key);
     }
 
     /**
