@@ -4,7 +4,6 @@
 
 #include "../src/cppdtp.hpp"
 
-#include <iostream>
 #include <stdlib.h>
 #include <assert.h>
 #include <cstring>

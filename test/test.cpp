@@ -13,9 +13,6 @@
 #include <time.h>
 #include <vector>
 #include <utility>
-#include <openssl/conf.h>
-#include <openssl/evp.h>
-#include <openssl/err.h>
 
 using namespace std;
 
@@ -195,6 +192,12 @@ void test_crypto() {
     vector<char> aes_decrypted = cppdtp::_aes_decrypt(key_iv, aes_encrypted);
     assert(aes_decrypted == aes_message);
     assert(aes_encrypted != aes_message);
+
+    // Test encrypting/decrypting AES key with RSA
+    vector<char> encrypted_key = cppdtp::_rsa_encrypt(public_key, key_iv);
+    vector<char> decrypted_key = cppdtp::_rsa_decrypt(private_key, encrypted_key);
+    assert(decrypted_key == key_iv);
+    assert(encrypted_key != key_iv);
 }
 
 /**
@@ -697,6 +700,12 @@ void test_remove_client() {
     s.remove_client(0);
     cppdtp::sleep(wait_time);
     assert(!c.is_connected());
+
+    // Stop server
+    assert(s.is_serving());
+    s.stop();
+    assert(!s.is_serving());
+    cppdtp::sleep(wait_time);
 
     // Check event counts
     assert_equal(s.receive_count, 0);

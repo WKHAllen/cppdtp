@@ -20,7 +20,7 @@ ifeq ($(OS),Windows_NT)
 	CLEAN_CMD = del bin\cppdtp bin\cppdtp.exe bin\test bin\test.exe
 else
 	INCLUDE_FLAGS =
-	LINK_FLAGS = -lpthread -lm -l:libcrypto.so.3
+	LINK_FLAGS = -lpthread -lm -L/usr/local/lib64 -l:libcrypto.so.3
 	TEST_BINARY = ./bin/test
 	POST_BUILD_CMD = chmod +x ./bin/test
 	CLEAN_CMD = rm -f bin/cppdtp bin/cppdtp.exe bin/test bin/test.exe

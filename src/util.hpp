@@ -70,6 +70,8 @@
 #define CPPDTP_CLIENT_SEND_FAILED         31
 #define CPPDTP_CLIENT_RECV_FAILED         32
 #define CPPDTP_OPENSSL_ERROR              33
+#define CPPDTP_SERVER_KEY_EXCHANGE_FAILED 34
+#define CPPDTP_CLIENT_KEY_EXCHANGE_FAILED 35
 
 // Global address family to use
 #ifndef CPPDTP_ADDRESS_FAMILY
@@ -225,19 +227,16 @@ namespace cppdtp {
     /**
      * Construct a message.
      *
-     * @tparam T The type of data in the message.
      * @param data The message data.
      * @return The constructed message.
      */
-    template<typename T>
-    const std::vector<char> _construct_message(const T &data) {
-        const std::vector<char> data_serialized = _serialize(data);
-        const std::vector<char> size = _encode_message_size(data_serialized.size());
+    const std::vector<char> _encode_message(const std::vector<char> &data) {
+        const std::vector<char> size = _encode_message_size(data.size());
 
         std::vector<char> message;
-        message.reserve(size.size() + data_serialized.size());
+        message.reserve(size.size() + data.size());
         message.insert(message.end(), size.begin(), size.end());
-        message.insert(message.end(), data_serialized.begin(), data_serialized.end());
+        message.insert(message.end(), data.begin(), data.end());
 
         return message;
     }
@@ -245,14 +244,13 @@ namespace cppdtp {
     /**
      * Deconstruct a message.
      *
-     * @tparam T The type of data in the message.
-     * @param object The object to deconstruct into.
      * @param message The message to be deconstructed.
+     * @return The deconstructed message.
      */
-    template<typename T>
-    void _deconstruct_message(T &object, const std::vector<char> &message) {
-        std::vector<char> data_serialized(message.begin() + CPPDTP_LENSIZE, message.end());
-        _deserialize<T>(object, data_serialized);
+    std::vector<char> _decode_message(const std::vector<char> &message) {
+        std::vector<char> data(message.begin() + CPPDTP_LENSIZE, message.end());
+
+        return data;
     }
 
     /**

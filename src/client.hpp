@@ -41,6 +41,9 @@ namespace cppdtp {
         // The client socket.
         _Socket sock;
 
+        // The client crypto key.
+        std::vector<char> key;
+
         // The thread from which the client will await messages from the server.
         std::thread handle_thread;
 
@@ -98,7 +101,7 @@ namespace cppdtp {
                     std::vector<char> size_buffer_vec(size_buffer, size_buffer + CPPDTP_LENSIZE);
                     size_t msg_size = _decode_message_size(size_buffer_vec);
                     std::vector<char> buffer_vec;
-                    buffer_vec.reserve(msg_size);
+                    buffer_vec.resize(msg_size);
                     char *buffer = buffer_vec.data();
 
                     // Wait in case the message is sent in multiple chunks
@@ -170,7 +173,7 @@ namespace cppdtp {
                     std::vector<char> size_buffer_vec(size_buffer, size_buffer + CPPDTP_LENSIZE);
                     size_t msg_size = _decode_message_size(size_buffer_vec);
                     std::vector<char> buffer_vec;
-                    buffer_vec.reserve(msg_size);
+                    buffer_vec.resize(msg_size);
                     char *buffer = buffer_vec.data();
 
                     // Wait in case the message is sent in multiple chunks
@@ -201,11 +204,76 @@ namespace cppdtp {
         }
 
         /**
+         * Exchange crypto keys with the server.
+         */
+        void exchange_keys() {
+            std::vector<char> size_buffer_vec;
+            size_buffer_vec.resize(CPPDTP_LENSIZE);
+            char *size_buffer = size_buffer_vec.data();
+            std::vector<char> buffer_vec;
+            int recv_code;
+
+#ifdef _WIN32
+            recv_code = recv(sock.sock, size_buffer, CPPDTP_LENSIZE, 0);
+
+            if (recv_code == SOCKET_ERROR || recv_code == 0) {
+                throw CPPDTPException(CPPDTP_CLIENT_KEY_EXCHANGE_FAILED, "failed to get public key from server");
+            }
+            else {
+                size_t msg_size = _decode_message_size(size_buffer_vec);
+                buffer_vec.resize(msg_size);
+                char *buffer = buffer_vec.data();
+
+                // Wait in case the message is sent in multiple chunks
+                sleep(0.01);
+
+                recv_code = recv(sock.sock, buffer, msg_size, 0);
+
+                if (recv_code == SOCKET_ERROR || recv_code == 0 || (size_t)recv_code != msg_size) {
+                throw CPPDTPException(CPPDTP_CLIENT_KEY_EXCHANGE_FAILED, "failed to get public key from server");
+                }
+            }
+#else
+            recv_code = read(sock.sock, size_buffer, CPPDTP_LENSIZE);
+
+            if (recv_code == 0 || recv_code == -1) {
+                throw CPPDTPException(CPPDTP_CLIENT_KEY_EXCHANGE_FAILED, "failed to get public key from server");
+            }
+            else {
+                size_t msg_size = _decode_message_size(size_buffer_vec);
+                buffer_vec.resize(msg_size);
+                char *buffer = buffer_vec.data();
+
+                // Wait in case the message is sent in multiple chunks
+                sleep(0.01);
+
+                recv_code = read(sock.sock, buffer, msg_size);
+
+                if (recv_code == 0 || recv_code == -1 || (size_t)recv_code != msg_size) {
+                    throw CPPDTPException(CPPDTP_CLIENT_KEY_EXCHANGE_FAILED, "failed to get public key from server");
+                }
+            }
+#endif
+
+            std::vector<char> aes_key = _new_aes_key_iv();
+            std::vector<char> aes_key_encrypted = _rsa_encrypt(buffer_vec, aes_key);
+            std::vector<char> aes_key_encoded = _encode_message(aes_key_encrypted);
+            const char *message_buffer = aes_key_encoded.data();
+
+            if (::send(sock.sock, message_buffer, aes_key_encoded.size(), 0) < 0) {
+                throw CPPDTPException(CPPDTP_CLIENT_KEY_EXCHANGE_FAILED, "failed to send public key to server");
+            }
+
+            key = aes_key;
+        }
+
+        /**
          * Call the receive event method.
          */
         void call_on_receive(std::vector<char> data) {
+            std::vector<char> data_decrypted = _aes_decrypt(key, data);
             R data_deserialized;
-            _deserialize(data_deserialized, data);
+            _deserialize(data_deserialized, data_decrypted);
             std::thread t(&cppdtp::Client<S, R>::receive, this, std::move(data_deserialized));
             t.detach();
         }
@@ -312,8 +380,23 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_CLIENT_CONNECT_FAILED, "client failed to connect to server");
             }
 
-            // Handle received data
             connected = true;
+
+            // Set blocking for key exchange
+#ifdef _WIN32
+            unsigned long mode = 0;
+
+            if (ioctlsocket(sock.sock, FIONBIO, &mode) != 0) {
+                throw CPPDTPException(CPPDTP_CLIENT_SOCK_INIT_FAILED, "failed to initialize client socket");
+            }
+#else
+            if (fcntl(sock.sock, F_SETFL, fcntl(sock.sock, F_GETFL, 0) & ~O_NONBLOCK) == -1) {
+                throw CPPDTPException(CPPDTP_CLIENT_SOCK_INIT_FAILED, "failed to initialize client socket");
+            }
+#endif
+
+            exchange_keys();
+
             call_handle();
         }
 
@@ -548,7 +631,9 @@ namespace cppdtp {
                 throw CPPDTPException(CPPDTP_CLIENT_NOT_CONNECTED, 0, "client is not connected to a server");
             }
 
-            std::vector<char> message = _construct_message(data);
+            std::vector<char> data_serialized = _serialize(data);
+            std::vector<char> data_encrypted = _aes_encrypt(key, data_serialized);
+            std::vector<char> message = _encode_message(data_encrypted);
             const char *message_buffer = message.data();
 
             if (::send(sock.sock, message_buffer, message.size(), 0) < 0) {

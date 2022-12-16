@@ -37,6 +37,45 @@ namespace cppdtp {
     static const size_t _aes_iv_size = 16;
 
     /**
+     * Pad a section of bytes to ensure its size is never a multiple of 16 bytes.
+     *
+     * @param data The bytes to pad.
+     * @return The padded bytes.
+     */
+    std::vector<char> _pad_data(const std::vector<char> &data) {
+        std::vector<char> padded;
+
+        if ((data.size() + 1) % 16 == 0) {
+            padded.push_back((char) 1);
+            padded.push_back((char) 255);
+        } else {
+            padded.push_back((char) 0);
+        }
+
+        padded.insert(padded.end(), data.begin(), data.end());
+
+        return padded;
+    }
+
+    /**
+     * Unpad a section of padded bytes.
+     *
+     * @param data The padded bytes.
+     * @return The unpadded bytes.
+     */
+    std::vector<char> _unpad_data(const std::vector<char> &data) {
+        std::vector<char> unpadded;
+
+        if (data[0] == ((char) 1)) {
+            unpadded.insert(unpadded.end(), data.begin() + 2, data.end());
+        } else {
+            unpadded.insert(unpadded.end(), data.begin() + 1, data.end());
+        }
+
+        return unpadded;
+    }
+
+    /**
      * Get an OpenSSL representation of a public key from the public key itself.
      *
      * @param public_key The public key.
@@ -172,8 +211,9 @@ namespace cppdtp {
      */
     std::vector<char> _rsa_encrypt(const std::vector<char> &public_key, const std::vector<char> &plaintext) {
         EVP_PKEY *evp_public_key = _rsa_public_key_from_bytes(public_key);
-        std::vector<unsigned char> plaintext_unsigned(plaintext.begin(), plaintext.end());
-        int plaintext_len = plaintext.size();
+        std::vector<char> plaintext_padded = _pad_data(plaintext);
+        std::vector<unsigned char> plaintext_unsigned(plaintext_padded.begin(), plaintext_padded.end());
+        int plaintext_len = plaintext_unsigned.size();
 
         int encrypted_key_len;
 
@@ -288,7 +328,8 @@ namespace cppdtp {
 
         plaintext_len += len;
         plaintext_unsigned.resize(plaintext_len);
-        std::vector<char> plaintext(plaintext_unsigned.begin(), plaintext_unsigned.end());
+        std::vector<char> plaintext_padded(plaintext_unsigned.begin(), plaintext_unsigned.end());
+        std::vector<char> plaintext = _unpad_data(plaintext_padded);
 
         EVP_CIPHER_CTX_free(ctx);
         _free_rsa_private_key(evp_private_key);
@@ -335,7 +376,8 @@ namespace cppdtp {
     std::vector<char> _aes_encrypt(const std::vector<char> &key_iv, const std::vector<char> &plaintext) {
         std::vector<unsigned char> key(key_iv.begin(), key_iv.begin() + _aes_key_size);
         std::vector<unsigned char> iv(key_iv.begin() + _aes_key_size, key_iv.end());
-        std::vector<unsigned char> plaintext_unsigned(plaintext.begin(), plaintext.end());
+        std::vector<char> plaintext_padded = _pad_data(plaintext);
+        std::vector<unsigned char> plaintext_unsigned(plaintext_padded.begin(), plaintext_padded.end());
         int plaintext_len = plaintext_unsigned.size();
 
         EVP_CIPHER_CTX *ctx;
@@ -417,7 +459,8 @@ namespace cppdtp {
 
         plaintext_len += len;
         plaintext_unsigned.resize(plaintext_len);
-        std::vector<char> plaintext(plaintext_unsigned.begin(), plaintext_unsigned.end());
+        std::vector<char> plaintext_padded(plaintext_unsigned.begin(), plaintext_unsigned.end());
+        std::vector<char> plaintext = _unpad_data(plaintext_padded);
 
         EVP_CIPHER_CTX_free(ctx);
 
