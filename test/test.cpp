@@ -120,24 +120,15 @@ void test_util() {
     assert_equal(test_custom_class_de, test_custom_class);
 
     // Test message size encoding
-    const unsigned char expected_msg_size_arr1[CPPDTP_LENSIZE] = {0, 0, 0, 0, 0};
-    const unsigned char expected_msg_size_arr2[CPPDTP_LENSIZE] = {0, 0, 0, 0, 1};
-    const unsigned char expected_msg_size_arr3[CPPDTP_LENSIZE] = {0, 0, 0, 0, 255};
-    const unsigned char expected_msg_size_arr4[CPPDTP_LENSIZE] = {0, 0, 0, 1, 0};
-    const unsigned char expected_msg_size_arr5[CPPDTP_LENSIZE] = {0, 0, 0, 1, 1};
-    const unsigned char expected_msg_size_arr6[CPPDTP_LENSIZE] = {1, 1, 1, 1, 1};
-    const unsigned char expected_msg_size_arr7[CPPDTP_LENSIZE] = {1, 2, 3, 4, 5};
-    const unsigned char expected_msg_size_arr8[CPPDTP_LENSIZE] = {11, 7, 5, 3, 2};
-    const unsigned char expected_msg_size_arr9[CPPDTP_LENSIZE] = {255, 255, 255, 255, 255};
-    vector<char> expected_msg_size1(expected_msg_size_arr1, expected_msg_size_arr1 + CPPDTP_LENSIZE);
-    vector<char> expected_msg_size2(expected_msg_size_arr2, expected_msg_size_arr2 + CPPDTP_LENSIZE);
-    vector<char> expected_msg_size3(expected_msg_size_arr3, expected_msg_size_arr3 + CPPDTP_LENSIZE);
-    vector<char> expected_msg_size4(expected_msg_size_arr4, expected_msg_size_arr4 + CPPDTP_LENSIZE);
-    vector<char> expected_msg_size5(expected_msg_size_arr5, expected_msg_size_arr5 + CPPDTP_LENSIZE);
-    vector<char> expected_msg_size6(expected_msg_size_arr6, expected_msg_size_arr6 + CPPDTP_LENSIZE);
-    vector<char> expected_msg_size7(expected_msg_size_arr7, expected_msg_size_arr7 + CPPDTP_LENSIZE);
-    vector<char> expected_msg_size8(expected_msg_size_arr8, expected_msg_size_arr8 + CPPDTP_LENSIZE);
-    vector<char> expected_msg_size9(expected_msg_size_arr9, expected_msg_size_arr9 + CPPDTP_LENSIZE);
+    vector<char> expected_msg_size1 = {0, 0, 0, 0, 0};
+    vector<char> expected_msg_size2 = {0, 0, 0, 0, 1};
+    vector<char> expected_msg_size3 = {0, 0, 0, 0, (char) 255};
+    vector<char> expected_msg_size4 = {0, 0, 0, 1, 0};
+    vector<char> expected_msg_size5 = {0, 0, 0, 1, 1};
+    vector<char> expected_msg_size6 = {1, 1, 1, 1, 1};
+    vector<char> expected_msg_size7 = {1, 2, 3, 4, 5};
+    vector<char> expected_msg_size8 = {11, 7, 5, 3, 2};
+    vector<char> expected_msg_size9 = {(char) 255, (char) 255, (char) 255, (char) 255, (char) 255};
     vector<char> msg_size1 = cppdtp::_encode_message_size(0);
     vector<char> msg_size2 = cppdtp::_encode_message_size(1);
     vector<char> msg_size3 = cppdtp::_encode_message_size(255);

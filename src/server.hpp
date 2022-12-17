@@ -256,7 +256,7 @@ namespace cppdtp {
                         char *buffer = buffer_vec.data();
 
                         // Wait in case the message is sent in multiple chunks
-                        sleep(0.01);
+                        sleep(CPPDTP_SLEEP_TIME);
 
                         recv_code = recv(client_sock.sock, buffer, msg_size, 0);
 
@@ -340,7 +340,7 @@ namespace cppdtp {
                         char *buffer = buffer_vec.data();
 
                         // Wait in case the message is sent in multiple chunks
-                        sleep(0.01);
+                        sleep(CPPDTP_SLEEP_TIME);
 
                         recv_code = read(client_sock.sock, buffer, msg_size);
 

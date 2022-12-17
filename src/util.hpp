@@ -108,6 +108,9 @@
 // Length of the size portion of each message
 #define CPPDTP_LENSIZE 5
 
+// Amount of time to sleep between socket reads
+#define CPPDTP_SLEEP_TIME 0.001
+
 // Determine if a blocking error has occurred
 // This is necessary because -Wlogical-op causes a compile-time error on machines where EAGAIN and EWOULDBLOCK are equal
 #ifndef _WIN32
@@ -324,7 +327,7 @@ cppdtp::mem_istream &operator>>(cppdtp::mem_istream &in, std::vector <T> &vec) {
     in >> size;
 
     for (size_t i = 0; i < size; i++) {
-        T val;
+        T val;  // This is why `T` must be default constructible
         in >> val;
         vec.push_back(val);
     }

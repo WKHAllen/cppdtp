@@ -105,7 +105,7 @@ namespace cppdtp {
                     char *buffer = buffer_vec.data();
 
                     // Wait in case the message is sent in multiple chunks
-                    sleep(0.01);
+                    sleep(CPPDTP_SLEEP_TIME);
 
                     recv_code = recv(sock.sock, buffer, msg_size, 0);
 
@@ -135,7 +135,7 @@ namespace cppdtp {
                     }
                 }
 
-                sleep(0.01);
+                sleep(CPPDTP_SLEEP_TIME);
             }
 #else
             // Set non-blocking
@@ -177,7 +177,7 @@ namespace cppdtp {
                     char *buffer = buffer_vec.data();
 
                     // Wait in case the message is sent in multiple chunks
-                    sleep(0.01);
+                    sleep(CPPDTP_SLEEP_TIME);
 
                     recv_code = read(sock.sock, buffer, msg_size);
 
@@ -198,7 +198,7 @@ namespace cppdtp {
                     }
                 }
 
-                sleep(0.01);
+                sleep(CPPDTP_SLEEP_TIME);
             }
 #endif
         }
@@ -225,7 +225,7 @@ namespace cppdtp {
                 char *buffer = buffer_vec.data();
 
                 // Wait in case the message is sent in multiple chunks
-                sleep(0.01);
+                sleep(CPPDTP_SLEEP_TIME);
 
                 recv_code = recv(sock.sock, buffer, msg_size, 0);
 
@@ -245,7 +245,7 @@ namespace cppdtp {
                 char *buffer = buffer_vec.data();
 
                 // Wait in case the message is sent in multiple chunks
-                sleep(0.01);
+                sleep(CPPDTP_SLEEP_TIME);
 
                 recv_code = read(sock.sock, buffer, msg_size);
 
