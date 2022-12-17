@@ -1,7 +1,7 @@
 ﻿/**
- * C++ Data Transfer Protocol
+ * Data Transfer Protocol for C++
  *
- * A cross platform networking library written in C++.
+ * Modern cross-platform networking interfaces for C++.
  *
  * Author: Will Allen
  */
