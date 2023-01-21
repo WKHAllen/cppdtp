@@ -467,9 +467,9 @@ namespace cppdtp {
         }
 
         /**
-         * Get the host address of the server the client is connected to.
+         * Get the host of the client.
          *
-         * @return The host address of the server.
+         * @return The host address of the client.
          */
         std::string get_host() {
             // Make sure the client is connected
@@ -520,9 +520,9 @@ namespace cppdtp {
         }
 
         /**
-         * Get the port of the server the client is connected to.
+         * Get the port of the client.
          *
-         * @return The port of the server.
+         * @return The port of the client.
          */
         uint16_t get_port() {
             // Make sure the client is connected
@@ -544,7 +544,7 @@ namespace cppdtp {
         }
 
         /**
-         * Get the host of the server.
+         * Get the host address of the server the client is connected to.
          *
          * @return The host address of the server.
          */
@@ -597,7 +597,7 @@ namespace cppdtp {
         }
 
         /**
-         * Get the port of the server.
+         * Get the port of the server the client is connected to.
          *
          * @return The port of the server.
          */
