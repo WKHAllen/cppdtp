@@ -255,7 +255,7 @@ namespace cppdtp {
             }
 #endif
 
-            std::vector<char> aes_key = _new_aes_key_iv();
+            std::vector<char> aes_key = _new_aes_key();
             std::vector<char> aes_key_encrypted = _rsa_encrypt(buffer_vec, aes_key);
             std::vector<char> aes_key_encoded = _encode_message(aes_key_encrypted);
             const char *message_buffer = aes_key_encoded.data();

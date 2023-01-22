@@ -178,17 +178,17 @@ void test_crypto() {
     // Test AES
     string aes_message_str = "Hello, AES!";
     vector<char> aes_message(aes_message_str.begin(), aes_message_str.end());
-    vector<char> key_iv = cppdtp::_new_aes_key_iv();
-    vector<char> aes_encrypted = cppdtp::_aes_encrypt(key_iv, aes_message);
-    vector<char> aes_decrypted = cppdtp::_aes_decrypt(key_iv, aes_encrypted);
+    vector<char> key = cppdtp::_new_aes_key();
+    vector<char> aes_encrypted = cppdtp::_aes_encrypt(key, aes_message);
+    vector<char> aes_decrypted = cppdtp::_aes_decrypt(key, aes_encrypted);
     assert(aes_decrypted == aes_message);
     assert(aes_encrypted != aes_message);
 
     // Test encrypting/decrypting AES key with RSA
-    vector<char> encrypted_key = cppdtp::_rsa_encrypt(public_key, key_iv);
+    vector<char> encrypted_key = cppdtp::_rsa_encrypt(public_key, key);
     vector<char> decrypted_key = cppdtp::_rsa_decrypt(private_key, encrypted_key);
-    assert(decrypted_key == key_iv);
-    assert(encrypted_key != key_iv);
+    assert(decrypted_key == key);
+    assert(encrypted_key != key);
 }
 
 /**

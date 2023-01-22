@@ -32,9 +32,9 @@ namespace cppdtp {
     static const size_t _aes_key_size = 32;
 
     /**
-     * The AES IV size.
+     * The AES nonce size.
      */
-    static const size_t _aes_iv_size = 16;
+    static const size_t _aes_nonce_size = 16;
 
     /**
      * Pad a section of bytes to ensure its size is never a multiple of 16 bytes.
@@ -217,9 +217,9 @@ namespace cppdtp {
 
         int encrypted_key_len;
 
-        int iv_len = EVP_CIPHER_iv_length(EVP_aes_256_cbc());
-        std::vector<unsigned char> iv;
-        iv.resize(iv_len);
+        int nonce_len = EVP_CIPHER_iv_length(EVP_aes_256_cbc());
+        std::vector<unsigned char> nonce;
+        nonce.resize(nonce_len);
 
         if ((encrypted_key_len = EVP_PKEY_size(evp_public_key)) == 0) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to get RSA public key size");
@@ -239,7 +239,7 @@ namespace cppdtp {
 
         unsigned char *encrypted_key_buffer = encrypted_key.data();
 
-        if (EVP_SealInit(ctx, EVP_aes_256_cbc(), &encrypted_key_buffer, &encrypted_key_len, iv.data(), &evp_public_key,
+        if (EVP_SealInit(ctx, EVP_aes_256_cbc(), &encrypted_key_buffer, &encrypted_key_len, nonce.data(), &evp_public_key,
                          1) == 0) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to initialize RSA encryption cipher");
         }
@@ -264,11 +264,11 @@ namespace cppdtp {
         ciphertext_unsigned.resize(ciphertext_len);
 
         std::vector<unsigned char> all_unsigned;
-        all_unsigned.reserve(CPPDTP_LENSIZE + encrypted_key_len + iv_len + ciphertext_len);
+        all_unsigned.reserve(CPPDTP_LENSIZE + encrypted_key_len + nonce_len + ciphertext_len);
         std::vector<char> encoded_encrypted_key_len = _encode_message_size((size_t) encrypted_key_len);
         all_unsigned.insert(all_unsigned.end(), encoded_encrypted_key_len.begin(), encoded_encrypted_key_len.end());
         all_unsigned.insert(all_unsigned.end(), encrypted_key.begin(), encrypted_key.end());
-        all_unsigned.insert(all_unsigned.end(), iv.begin(), iv.end());
+        all_unsigned.insert(all_unsigned.end(), nonce.begin(), nonce.end());
         all_unsigned.insert(all_unsigned.end(), ciphertext_unsigned.begin(), ciphertext_unsigned.end());
         std::vector<char> ciphertext(all_unsigned.begin(), all_unsigned.end());
 
@@ -287,16 +287,16 @@ namespace cppdtp {
      */
     std::vector<char> _rsa_decrypt(const std::vector<char> &private_key, const std::vector<char> &ciphertext) {
         EVP_PKEY *evp_private_key = _rsa_private_key_from_bytes(private_key);
-        int iv_len = EVP_CIPHER_iv_length(EVP_aes_256_cbc());
+        int nonce_len = EVP_CIPHER_iv_length(EVP_aes_256_cbc());
         std::vector<unsigned char> all_unsigned(ciphertext.begin(), ciphertext.end());
         std::vector<char> encoded_encrypted_key_len(all_unsigned.begin(), all_unsigned.begin() + CPPDTP_LENSIZE);
         int encrypted_key_len = (int) _decode_message_size(encoded_encrypted_key_len);
         std::vector<unsigned char> encrypted_key(all_unsigned.begin() + CPPDTP_LENSIZE,
                                                  all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len);
-        std::vector<unsigned char> iv(all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len,
-                                      all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len + iv_len);
+        std::vector<unsigned char> nonce(all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len,
+                                      all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len + nonce_len);
         std::vector<unsigned char> ciphertext_unsigned(
-                all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len + iv_len, all_unsigned.end());
+                all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len + nonce_len, all_unsigned.end());
         int ciphertext_len = ciphertext_unsigned.size();
 
         EVP_CIPHER_CTX *ctx;
@@ -308,7 +308,7 @@ namespace cppdtp {
                                   "failed to allocate RSA cipher context for decryption");
         }
 
-        if (EVP_OpenInit(ctx, EVP_aes_256_cbc(), encrypted_key.data(), encrypted_key_len, iv.data(), evp_private_key) ==
+        if (EVP_OpenInit(ctx, EVP_aes_256_cbc(), encrypted_key.data(), encrypted_key_len, nonce.data(), evp_private_key) ==
             0) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to initialize RSA decryption cipher");
         }
@@ -338,44 +338,39 @@ namespace cppdtp {
     }
 
     /**
-     * Generate a new AES key and IV.
+     * Generate a new AES key.
      *
-     * @return The generated AES key and IV.
+     * @return The generated AES key.
      */
-    std::vector<char> _new_aes_key_iv() {
-        int num_rounds = 5;
+    std::vector<char> _new_aes_key() {
         std::vector<unsigned char> key_unsigned;
         key_unsigned.resize(_aes_key_size);
-        std::vector<unsigned char> iv_unsigned;
-        iv_unsigned.resize(_aes_iv_size);
-        std::vector<unsigned char> key_data;
-        key_data.resize(_aes_key_size);
 
-        if (RAND_bytes(key_data.data(), _aes_key_size) == 0) {
+        if (RAND_bytes(key_unsigned.data(), _aes_key_size) == 0) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to get random bytes for AES key");
         }
 
-        if (EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha1(), NULL, key_data.data(), key_data.size(), num_rounds,
-                           key_unsigned.data(), iv_unsigned.data()) != _aes_key_size) {
-            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "incorrect number of bytes in AES key");
-        }
+        std::vector<char> key(key_unsigned.begin(), key_unsigned.end());
 
-        std::vector<char> key_iv(key_unsigned.begin(), key_unsigned.end());
-        key_iv.insert(key_iv.end(), iv_unsigned.begin(), iv_unsigned.end());
-
-        return key_iv;
+        return key;
     }
 
     /**
      * Encrypt data with AES.
      *
-     * @param key_iv The AES key and IV.
+     * @param key The AES key.
      * @param plaintext The data to encrypt.
-     * @return The encrypted data.
+     * @return The encrypted data with the nonce prepended.
      */
-    std::vector<char> _aes_encrypt(const std::vector<char> &key_iv, const std::vector<char> &plaintext) {
-        std::vector<unsigned char> key(key_iv.begin(), key_iv.begin() + _aes_key_size);
-        std::vector<unsigned char> iv(key_iv.begin() + _aes_key_size, key_iv.end());
+    std::vector<char> _aes_encrypt(const std::vector<char> &key, const std::vector<char> &plaintext) {
+        std::vector<unsigned char> key_unsigned(key.begin(), key.end());
+        std::vector<unsigned char> nonce_unsigned;
+        nonce_unsigned.resize(_aes_nonce_size);
+
+        if (RAND_bytes(nonce_unsigned.data(), _aes_nonce_size) == 0) {
+            throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to get random bytes for AES nonce");
+        }
+
         std::vector<char> plaintext_padded = _pad_data(plaintext);
         std::vector<unsigned char> plaintext_unsigned(plaintext_padded.begin(), plaintext_padded.end());
         int plaintext_len = plaintext_unsigned.size();
@@ -389,7 +384,7 @@ namespace cppdtp {
                                   "failed to allocate AES cipher context for encryption");
         }
 
-        if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key.data(), iv.data()) == 0) {
+        if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key_unsigned.data(), nonce_unsigned.data()) == 0) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to initialize AES encryption cipher");
         }
 
@@ -411,24 +406,25 @@ namespace cppdtp {
 
         ciphertext_len += len;
         ciphertext_unsigned.resize(ciphertext_len);
-        std::vector<char> ciphertext(ciphertext_unsigned.begin(), ciphertext_unsigned.end());
+        std::vector<char> ciphertext_with_nonce(ciphertext_unsigned.begin(), ciphertext_unsigned.end());
+        ciphertext_with_nonce.insert(ciphertext_with_nonce.begin(), nonce_unsigned.begin(), nonce_unsigned.end());
 
         EVP_CIPHER_CTX_free(ctx);
 
-        return ciphertext;
+        return ciphertext_with_nonce;
     }
 
     /**
      * Decrypt data with AES.
      *
-     * @param key_iv The AES key and IV.
-     * @param ciphertext The data to decrypt.
+     * @param key The AES key.
+     * @param ciphertext_with_nonce The data to decrypt, containing the prepended nonce.
      * @return The decrypted data.
      */
-    std::vector<char> _aes_decrypt(const std::vector<char> &key_iv, const std::vector<char> &ciphertext) {
-        std::vector<unsigned char> key(key_iv.begin(), key_iv.begin() + _aes_key_size);
-        std::vector<unsigned char> iv(key_iv.begin() + _aes_key_size, key_iv.end());
-        std::vector<unsigned char> ciphertext_unsigned(ciphertext.begin(), ciphertext.end());
+    std::vector<char> _aes_decrypt(const std::vector<char> &key, const std::vector<char> &ciphertext_with_nonce) {
+        std::vector<unsigned char> key_unsigned(key.begin(), key.end());
+        std::vector<unsigned char> nonce_unsigned(ciphertext_with_nonce.begin(), ciphertext_with_nonce.begin() + _aes_nonce_size);
+        std::vector<unsigned char> ciphertext_unsigned(ciphertext_with_nonce.begin() + _aes_nonce_size, ciphertext_with_nonce.end());
         int ciphertext_len = ciphertext_unsigned.size();
 
         EVP_CIPHER_CTX *ctx;
@@ -440,7 +436,7 @@ namespace cppdtp {
                                   "failed to allocate AES cipher context for decryption");
         }
 
-        if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key.data(), iv.data()) == 0) {
+        if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key_unsigned.data(), nonce_unsigned.data()) == 0) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to initialize AES decryption cipher");
         }
 
