@@ -14,7 +14,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "../include/SimpleBinStream.h"
+#include "binstream.hpp"
 
 #pragma GCC diagnostic pop
 
@@ -35,7 +35,7 @@
 
 #endif
 
-// CPPDTP error codes
+ // CPPDTP error codes
 #define CPPDTP_SUCCESS                     0
 #define CPPDTP_WINSOCK_INIT_FAILED         1
 #define CPPDTP_SERVER_SOCK_INIT_FAILED     2
@@ -297,7 +297,7 @@ namespace cppdtp {
         size_t wcharsize = wcslen(wchar) + 1;
         size_t convertedChars = 0;
         const size_t newsize = wcharsize * 2;
-        char* cstr = new char[newsize];
+        char *cstr = new char[newsize];
         wcstombs_s(&convertedChars, cstr, newsize, wchar, _TRUNCATE);
         return cstr;
     }

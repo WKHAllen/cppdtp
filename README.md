@@ -67,7 +67,7 @@ private:
         cout << "Received response from server: " << data << endl;
         assert(data == message.length());
     }
-    
+
     void disconnected() override {
         cout << "Unexpectedly disconnected from server" << endl;
     }
@@ -81,7 +81,7 @@ int main() {
     string message = "Hello, server!";
     MyClient client(message);
     client.connect("127.0.0.1", 29275);
-    
+
     // Send a message to the server
     client.send(message);
 
@@ -104,7 +104,7 @@ in [`src/util.hpp`](src/util.hpp):
 template<typename T>
 cppdtp::mem_ostream &operator<<(cppdtp::mem_ostream &out, const std::vector <T> &vec) {
     static_assert(std::is_default_constructible<T>::value, "T must be default constructible");
-    
+
     // Serialize a std::vector<T>
 
     size_t size = vec.size();
@@ -146,12 +146,12 @@ The protocol has a few dependencies that must be included when compiling:
 ### Compiling on Windows
 
 - Link Winsock (`-lWs2_32`)
-- Link and provide headers for OpenSSL 3.0
+- Link OpenSSL 3.0
 
 ### Compiling on other platforms
 
 - Link pthread (`-lpthread`)
-- Link and provide headers for OpenSSL 3.0
+- Link OpenSSL 3.0
 
 For more information on the compilation process, see the [Makefile](Makefile).
 

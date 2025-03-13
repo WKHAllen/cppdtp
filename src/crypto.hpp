@@ -8,16 +8,82 @@
 
 #include <vector>
 #include <utility>
-#include <openssl/conf.h>
-#include <openssl/evp.h>
-#include <openssl/rsa.h>
-#include <openssl/aes.h>
-#include <openssl/pem.h>
-#include <openssl/rand.h>
-#include <openssl/err.h>
 
 #include "util.hpp"
 #include "exceptions.hpp"
+
+extern "C" {
+
+#define BIO void
+#define BIO_METHOD void
+#define EVP_PKEY void
+#define pem_password_cb void
+#define OSSL_LIB_CTX void
+#define EVP_CIPHER_CTX void
+#define EVP_CIPHER void
+#define ENGINE void
+
+#define BIO_CTRL_PENDING 10
+
+    extern BIO *BIO_new(const BIO_METHOD *type);
+    extern BIO *BIO_new_mem_buf(const void *buf, int len);
+    extern const BIO_METHOD *BIO_s_mem(void);
+    extern long BIO_ctrl(BIO *bp, int cmd, long larg, void *parg);
+    extern int BIO_read(BIO *b, void *data, int dlen);
+    extern int BIO_free(BIO *a);
+    extern void BIO_free_all(BIO *a);
+    extern EVP_PKEY *PEM_read_bio_PUBKEY(BIO *bp, EVP_PKEY **x, pem_password_cb *cb,
+        void *u);
+    extern EVP_PKEY *PEM_read_bio_PrivateKey(BIO *bp, EVP_PKEY **x,
+        pem_password_cb *cb, void *u);
+    extern int PEM_write_bio_PUBKEY(BIO *bp, EVP_PKEY *x);
+    extern int PEM_write_bio_PrivateKey(BIO *bp, const EVP_PKEY *x,
+        const EVP_CIPHER *enc, unsigned char *kstr,
+        int klen, pem_password_cb *cb, void *u);
+    extern EVP_PKEY *EVP_PKEY_Q_keygen(OSSL_LIB_CTX *libctx, const char *propq,
+        const char *type, ...);
+    extern int EVP_PKEY_get_size(const EVP_PKEY *pkey);
+    extern void EVP_PKEY_free(EVP_PKEY *key);
+    extern EVP_CIPHER_CTX *EVP_CIPHER_CTX_new(void);
+    extern int EVP_CIPHER_CTX_get_block_size(const EVP_CIPHER_CTX *ctx);
+    extern void EVP_CIPHER_CTX_free(EVP_CIPHER_CTX *ctx);
+    extern EVP_CIPHER *EVP_aes_256_cbc(void);
+    extern int EVP_CIPHER_get_iv_length(const EVP_CIPHER *e);
+    extern int EVP_SealInit(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type,
+        unsigned char **ek, int *ekl, unsigned char *iv,
+        EVP_PKEY **pubk, int npubk);
+    extern int EVP_SealFinal(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl);
+    extern int EVP_OpenInit(EVP_CIPHER_CTX *ctx, EVP_CIPHER *type,
+        unsigned char *ek, int ekl, unsigned char *iv,
+        EVP_PKEY *priv);
+    extern int EVP_OpenFinal(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl);
+    extern int EVP_EncryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type,
+        ENGINE *impl, const unsigned char *key,
+        const unsigned char *iv);
+    extern int EVP_EncryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,
+        int *outl, const unsigned char *in, int inl);
+    extern int EVP_EncryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *out,
+        int *outl);
+    extern int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type,
+        ENGINE *impl, const unsigned char *key,
+        const unsigned char *iv);
+    extern int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl,
+        const unsigned char *in, int inl);
+    extern int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm,
+        int *outl);
+    extern int RAND_bytes(unsigned char *buf, int num);
+    extern unsigned long ERR_get_error(void);
+
+#define BIO_pending(b) (int)BIO_ctrl(b, BIO_CTRL_PENDING, 0, NULL)
+#define EVP_PKEY_size EVP_PKEY_get_size
+#define EVP_CIPHER_CTX_block_size EVP_CIPHER_CTX_get_block_size
+#define EVP_CIPHER_iv_length EVP_CIPHER_get_iv_length
+#define EVP_RSA_gen(bits) \
+        EVP_PKEY_Q_keygen(NULL, NULL, "RSA", (size_t)(0 + (bits)))
+#define EVP_SealUpdate(a, b, c, d, e) EVP_EncryptUpdate(a, b, c, d, e)
+#define EVP_OpenUpdate(a, b, c, d, e) EVP_DecryptUpdate(a, b, c, d, e)
+
+}
 
 namespace cppdtp {
 
@@ -89,7 +155,7 @@ namespace cppdtp {
 
         if ((pbkeybio = BIO_new_mem_buf((const void *) pub_key, pub_len)) == NULL) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(),
-                                  "failed to create RSA public key BIO from buffer");
+                "failed to create RSA public key BIO from buffer");
         }
 
         EVP_PKEY *pb_rsa = NULL;
@@ -117,7 +183,7 @@ namespace cppdtp {
 
         if ((prkeybio = BIO_new_mem_buf((const void *) pri_key, pri_len)) == NULL) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(),
-                                  "failed to create RSA private key BIO from buffer");
+                "failed to create RSA private key BIO from buffer");
         }
 
         EVP_PKEY *p_rsa = NULL;
@@ -234,13 +300,13 @@ namespace cppdtp {
 
         if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(),
-                                  "failed to allocate RSA cipher context for encryption");
+                "failed to allocate RSA cipher context for encryption");
         }
 
         unsigned char *encrypted_key_buffer = encrypted_key.data();
 
         if (EVP_SealInit(ctx, EVP_aes_256_cbc(), &encrypted_key_buffer, &encrypted_key_len, nonce.data(), &evp_public_key,
-                         1) == 0) {
+            1) == 0) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to initialize RSA encryption cipher");
         }
 
@@ -292,11 +358,11 @@ namespace cppdtp {
         std::vector<char> encoded_encrypted_key_len(all_unsigned.begin(), all_unsigned.begin() + CPPDTP_LENSIZE);
         int encrypted_key_len = (int) _decode_message_size(encoded_encrypted_key_len);
         std::vector<unsigned char> encrypted_key(all_unsigned.begin() + CPPDTP_LENSIZE,
-                                                 all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len);
+            all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len);
         std::vector<unsigned char> nonce(all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len,
-                                      all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len + nonce_len);
+            all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len + nonce_len);
         std::vector<unsigned char> ciphertext_unsigned(
-                all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len + nonce_len, all_unsigned.end());
+            all_unsigned.begin() + CPPDTP_LENSIZE + encrypted_key_len + nonce_len, all_unsigned.end());
         int ciphertext_len = ciphertext_unsigned.size();
 
         EVP_CIPHER_CTX *ctx;
@@ -305,11 +371,10 @@ namespace cppdtp {
 
         if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(),
-                                  "failed to allocate RSA cipher context for decryption");
+                "failed to allocate RSA cipher context for decryption");
         }
 
-        if (EVP_OpenInit(ctx, EVP_aes_256_cbc(), encrypted_key.data(), encrypted_key_len, nonce.data(), evp_private_key) ==
-            0) {
+        if (EVP_OpenInit(ctx, EVP_aes_256_cbc(), encrypted_key.data(), encrypted_key_len, nonce.data(), evp_private_key) == 0) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(), "failed to initialize RSA decryption cipher");
         }
 
@@ -381,7 +446,7 @@ namespace cppdtp {
 
         if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(),
-                                  "failed to allocate AES cipher context for encryption");
+                "failed to allocate AES cipher context for encryption");
         }
 
         if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key_unsigned.data(), nonce_unsigned.data()) == 0) {
@@ -433,7 +498,7 @@ namespace cppdtp {
 
         if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
             throw CPPDTPException(CPPDTP_OPENSSL_ERROR, ERR_get_error(),
-                                  "failed to allocate AES cipher context for decryption");
+                "failed to allocate AES cipher context for decryption");
         }
 
         if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key_unsigned.data(), nonce_unsigned.data()) == 0) {
