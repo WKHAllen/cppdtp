@@ -11,8 +11,8 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <time.h>
+#include <array>
 #include <vector>
-#include <utility>
 
 using namespace std;
 
@@ -79,9 +79,9 @@ void test_util() {
     size_t test_size_t = 47362409218;
     float test_float = 3.14;
     double test_double = 2.718;
-    array<int, 8> test_array = {0, 1, 1, 2, 3, 5, 8, 13};
-    vector<char> test_vector_char = {'d', 't', 'p'};
-    vector <string> test_vector_str = {"Hello", "from", "the serializer", ": )"};
+    array<int, 8> test_array = { 0, 1, 1, 2, 3, 5, 8, 13 };
+    vector<char> test_vector_char = { 'd', 't', 'p' };
+    vector<string> test_vector_str = { "Hello", "from", "the serializer", ": )" };
     string test_string = "Hello, cppdtp!";
     Custom test_custom_class;
     test_custom_class.a = 123;
@@ -95,7 +95,7 @@ void test_util() {
     double test_double_de;
     array<int, 8> test_array_de;
     vector<char> test_vector_char_de;
-    vector <string> test_vector_str_de;
+    vector<string> test_vector_str_de;
     string test_string_de;
     Custom test_custom_class_de;
     cppdtp::_deserialize(test_bool_de, cppdtp::_serialize(test_bool));
@@ -120,15 +120,15 @@ void test_util() {
     assert_equal(test_custom_class_de, test_custom_class);
 
     // Test message size encoding
-    vector<char> expected_msg_size1 = {0, 0, 0, 0, 0};
-    vector<char> expected_msg_size2 = {0, 0, 0, 0, 1};
-    vector<char> expected_msg_size3 = {0, 0, 0, 0, (char) 255};
-    vector<char> expected_msg_size4 = {0, 0, 0, 1, 0};
-    vector<char> expected_msg_size5 = {0, 0, 0, 1, 1};
-    vector<char> expected_msg_size6 = {1, 1, 1, 1, 1};
-    vector<char> expected_msg_size7 = {1, 2, 3, 4, 5};
-    vector<char> expected_msg_size8 = {11, 7, 5, 3, 2};
-    vector<char> expected_msg_size9 = {(char) 255, (char) 255, (char) 255, (char) 255, (char) 255};
+    vector<char> expected_msg_size1 = { 0, 0, 0, 0, 0 };
+    vector<char> expected_msg_size2 = { 0, 0, 0, 0, 1 };
+    vector<char> expected_msg_size3 = { 0, 0, 0, 0, (char) 255 };
+    vector<char> expected_msg_size4 = { 0, 0, 0, 1, 0 };
+    vector<char> expected_msg_size5 = { 0, 0, 0, 1, 1 };
+    vector<char> expected_msg_size6 = { 1, 1, 1, 1, 1 };
+    vector<char> expected_msg_size7 = { 1, 2, 3, 4, 5 };
+    vector<char> expected_msg_size8 = { 11, 7, 5, 3, 2 };
+    vector<char> expected_msg_size9 = { (char) 255, (char) 255, (char) 255, (char) 255, (char) 255 };
     vector<char> msg_size1 = cppdtp::_encode_message_size(0);
     vector<char> msg_size2 = cppdtp::_encode_message_size(1);
     vector<char> msg_size3 = cppdtp::_encode_message_size(255);
@@ -273,8 +273,8 @@ void test_addresses() {
     assert(s.events_done());
     vector <string> s_received;
     vector <size_t> s_received_ids;
-    vector <size_t> s_connect_ids = {0};
-    vector <size_t> s_disconnect_ids = {0};
+    vector <size_t> s_connect_ids = { 0 };
+    vector <size_t> s_disconnect_ids = { 0 };
     assert_arrays_equal(s.received, s_received);
     assert_arrays_equal(s.received_client_ids, s_received_ids);
     assert_arrays_equal(s.connect_client_ids, s_connect_ids);
@@ -323,10 +323,10 @@ void test_send_receive() {
     assert_equal(s.connect_count, 0);
     assert_equal(s.disconnect_count, 0);
     assert(s.events_done());
-    vector <string> s_received = {server_message};
-    vector <size_t> s_received_ids = {0};
-    vector <size_t> s_connect_ids = {0};
-    vector <size_t> s_disconnect_ids = {0};
+    vector <string> s_received = { server_message };
+    vector <size_t> s_received_ids = { 0 };
+    vector <size_t> s_connect_ids = { 0 };
+    vector <size_t> s_disconnect_ids = { 0 };
     assert_arrays_equal(s.received, s_received);
     assert_arrays_equal(s.received_client_ids, s_received_ids);
     assert_arrays_equal(s.connect_client_ids, s_connect_ids);
@@ -334,7 +334,7 @@ void test_send_receive() {
     assert_equal(c.receive_count, 0);
     assert_equal(c.disconnected_count, 0);
     assert(c.events_done());
-    vector <string> c_received = {client_message};
+    vector <string> c_received = { client_message };
     assert_arrays_equal(c.received, c_received);
 }
 
@@ -377,9 +377,9 @@ void test_send_large_messages() {
     assert_equal(s.connect_count, 0);
     assert_equal(s.disconnect_count, 0);
     assert(s.events_done());
-    vector <size_t> s_received_ids = {0};
-    vector <size_t> s_connect_ids = {0};
-    vector <size_t> s_disconnect_ids = {0};
+    vector <size_t> s_received_ids = { 0 };
+    vector <size_t> s_connect_ids = { 0 };
+    vector <size_t> s_disconnect_ids = { 0 };
     assert(s.received.size() == 1);
     assert(s.received[0] == large_server_message);
     assert_arrays_equal(s.received_client_ids, s_received_ids);
@@ -447,8 +447,8 @@ void test_sending_numerous_messages() {
     assert_equal(s.connect_count, 0);
     assert_equal(s.disconnect_count, 0);
     assert(s.events_done());
-    vector <size_t> s_connect_ids = {0};
-    vector <size_t> s_disconnect_ids = {0};
+    vector <size_t> s_connect_ids = { 0 };
+    vector <size_t> s_disconnect_ids = { 0 };
     assert_arrays_equal(s.received, server_messages);
     assert_arrays_equal(s.connect_client_ids, s_connect_ids);
     assert_arrays_equal(s.disconnect_client_ids, s_disconnect_ids);
@@ -506,9 +506,9 @@ void test_sending_custom_types() {
     assert_equal(s.connect_count, 0);
     assert_equal(s.disconnect_count, 0);
     assert(s.events_done());
-    vector <size_t> s_received_ids = {0};
-    vector <size_t> s_connect_ids = {0};
-    vector <size_t> s_disconnect_ids = {0};
+    vector <size_t> s_received_ids = { 0 };
+    vector <size_t> s_connect_ids = { 0 };
+    vector <size_t> s_disconnect_ids = { 0 };
     assert(s.received.size() == 1);
     assert(s.received[0] == custom_server_message);
     assert_arrays_equal(s.received_client_ids, s_received_ids);
@@ -596,10 +596,10 @@ void test_multiple_clients() {
     assert_equal(s.connect_count, 0);
     assert_equal(s.disconnect_count, 0);
     assert(s.events_done());
-    vector <string> s_received = {message_from_client1, message_from_client2};
-    vector <size_t> s_received_ids = {0, 1};
-    vector <size_t> s_connect_ids = {0, 1};
-    vector <size_t> s_disconnect_ids = {0, 1};
+    vector <string> s_received = { message_from_client1, message_from_client2 };
+    vector <size_t> s_received_ids = { 0, 1 };
+    vector <size_t> s_connect_ids = { 0, 1 };
+    vector <size_t> s_disconnect_ids = { 0, 1 };
     assert_arrays_equal(s.received, s_received);
     assert_arrays_equal(s.received_client_ids, s_received_ids);
     assert_arrays_equal(s.connect_client_ids, s_connect_ids);
@@ -607,12 +607,12 @@ void test_multiple_clients() {
     assert_equal(c1.receive_count, 0);
     assert_equal(c1.disconnected_count, 0);
     assert(c1.events_done());
-    vector <size_t> c1_received = {message_from_client1.length(), message_from_server};
+    vector <size_t> c1_received = { message_from_client1.length(), message_from_server };
     assert_arrays_equal(c1.received, c1_received);
     assert_equal(c2.receive_count, 0);
     assert_equal(c2.disconnected_count, 0);
     assert(c2.events_done());
-    vector <size_t> c2_received = {message_from_client2.length(), message_from_server};
+    vector <size_t> c2_received = { message_from_client2.length(), message_from_server };
     assert_arrays_equal(c2.received, c2_received);
 }
 
@@ -652,7 +652,7 @@ void test_client_disconnected() {
     assert(s.events_done());
     vector <string> s_received = {};
     vector <size_t> s_received_ids = {};
-    vector <size_t> s_connect_ids = {0};
+    vector <size_t> s_connect_ids = { 0 };
     vector <size_t> s_disconnect_ids = {};
     assert_arrays_equal(s.received, s_received);
     assert_arrays_equal(s.received_client_ids, s_received_ids);
@@ -705,8 +705,8 @@ void test_remove_client() {
     assert(s.events_done());
     vector <string> s_received = {};
     vector <size_t> s_received_ids = {};
-    vector <size_t> s_connect_ids = {0};
-    vector <size_t> s_disconnect_ids = {0};
+    vector <size_t> s_connect_ids = { 0 };
+    vector <size_t> s_disconnect_ids = { 0 };
     assert_arrays_equal(s.received, s_received);
     assert_arrays_equal(s.received_client_ids, s_received_ids);
     assert_arrays_equal(s.connect_client_ids, s_connect_ids);
