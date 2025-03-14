@@ -305,34 +305,4 @@ namespace cppdtp {
 
 } // namespace cppdtp
 
-template<typename T>
-cppdtp::mem_ostream &operator<<(cppdtp::mem_ostream &out, const std::vector <T> &vec) {
-    static_assert(std::is_default_constructible<T>::value, "T must be default constructible");
-
-    size_t size = vec.size();
-    out << size;
-
-    for (size_t i = 0; i < vec.size(); i++) {
-        out << vec[i];
-    }
-
-    return out;
-}
-
-template<typename T>
-cppdtp::mem_istream &operator>>(cppdtp::mem_istream &in, std::vector <T> &vec) {
-    static_assert(std::is_default_constructible<T>::value, "T must be default constructible");
-
-    size_t size = 0;
-    in >> size;
-
-    for (size_t i = 0; i < size; i++) {
-        T val;  // This is why `T` must be default constructible
-        in >> val;
-        vec.push_back(val);
-    }
-
-    return in;
-}
-
 #endif // CPPDTP_UTIL_HPP

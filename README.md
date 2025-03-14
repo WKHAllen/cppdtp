@@ -97,8 +97,7 @@ are [POD types](https://stackoverflow.com/questions/146452/what-are-pod-types-in
 serialization/deserialization implementations should be sufficient. For custom types that contain pointers, contain
 dynamically sized members, or are in some other way not POD types, it will be necessary to provide a
 serialization/deserialization implementation for them. To do this, write an implementation for streaming the type
-to `cppdtp::mem_ostream` and from `cppdtp::mem_istream`. Below is an example, which is already implemented for you
-in [`src/util.hpp`](src/util.hpp):
+to `cppdtp::mem_ostream` and from `cppdtp::mem_istream`. Below is an example, which is already implemented for you:
 
 ```c++
 template<typename T>

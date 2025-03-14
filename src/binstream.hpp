@@ -2,27 +2,27 @@
  * From: https://github.com/shaovoon/simplebinstream
  */
 
-// The MIT License (MIT)
-// Simplistic Binary Streams 1.0.3
-// Copyright (C) 2014 - 2019, by Wong Shao Voon (shaovoon@yahoo.com)
-//
-// http://opensource.org/licenses/MIT
-//
-// version 0.9.2   : Optimize mem_istream constructor for const char*
-// version 0.9.3   : Optimize mem_ostream vector insert
-// version 0.9.4   : New ptr_istream class
-// version 0.9.5   : Add Endianness Swap with compile time check
-// version 0.9.6   : Using C File APIs, instead of STL file streams
-// version 0.9.7   : Add memfile_istream
-// version 0.9.8   : Fix GCC and Clang template errors
-// version 0.9.9   : Fix bug of getting previous value when reading empty string
-// version 1.0.0   : Fix buffer overrun bug when reading string (reported by imtrobin)
-// version 1.0.1   : Fix memfile_istream tellg and seekg bug reported by macxfadz,
-//                   use is_arithmetic instead of is_integral to determine swapping
-// version 1.0.2   : Add overloaded open functions that take in file parameter in
-//                   wide char type.(only available on win32)
-// version 1.0.3   : Remove <iostream> header
-// version 1.0.4   : Fixed file_istream's seekg() and added writeat() to mem_ostream and memfile_ostream. Thanks Festering from CodeProject.
+ // The MIT License (MIT)
+ // Simplistic Binary Streams 1.0.3
+ // Copyright (C) 2014 - 2019, by Wong Shao Voon (shaovoon@yahoo.com)
+ //
+ // http://opensource.org/licenses/MIT
+ //
+ // version 0.9.2   : Optimize mem_istream constructor for const char*
+ // version 0.9.3   : Optimize mem_ostream vector insert
+ // version 0.9.4   : New ptr_istream class
+ // version 0.9.5   : Add Endianness Swap with compile time check
+ // version 0.9.6   : Using C File APIs, instead of STL file streams
+ // version 0.9.7   : Add memfile_istream
+ // version 0.9.8   : Fix GCC and Clang template errors
+ // version 0.9.9   : Fix bug of getting previous value when reading empty string
+ // version 1.0.0   : Fix buffer overrun bug when reading string (reported by imtrobin)
+ // version 1.0.1   : Fix memfile_istream tellg and seekg bug reported by macxfadz,
+ //                   use is_arithmetic instead of is_integral to determine swapping
+ // version 1.0.2   : Add overloaded open functions that take in file parameter in
+ //                   wide char type.(only available on win32)
+ // version 1.0.3   : Remove <iostream> header
+ // version 1.0.4   : Fixed file_istream's seekg() and added writeat() to mem_ostream and memfile_ostream. Thanks Festering from CodeProject.
 
 #ifndef SimpleBinStream_H
 #define SimpleBinStream_H
@@ -113,23 +113,23 @@ namespace simple {
 
     template<class T>
     using number_type =
-            typename std::conditional<
-                    sizeof(T) == 1,
-                    SizeOf1,
-                    typename std::conditional<
-                            sizeof(T) == 2,
-                            SizeOf2,
-                            typename std::conditional<
-                                    sizeof(T) == 4,
-                                    SizeOf4,
-                                    typename std::conditional<
-                                            sizeof(T) == 8,
-                                            SizeOf8,
-                                            UnknownSize
-                                    >::type
-                            >::type
-                    >::type
-            >::type;
+        typename std::conditional<
+        sizeof(T) == 1,
+        SizeOf1,
+        typename std::conditional<
+        sizeof(T) == 2,
+        SizeOf2,
+        typename std::conditional<
+        sizeof(T) == 4,
+        SizeOf4,
+        typename std::conditional<
+        sizeof(T) == 8,
+        SizeOf8,
+        UnknownSize
+        >::type
+        >::type
+        >::type
+        >::type;
 
     template<typename T>
     void swap_if_arithmetic(T &val, std::true_type) {
@@ -163,10 +163,10 @@ namespace simple {
         }
 
 #ifdef _MSC_VER
-        file_istream(const wchar_t * file) : input_file_ptr(nullptr), file_size(0L), read_length(0L)
-    {
-        open(file);
-    }
+        file_istream(const wchar_t *file) : input_file_ptr(nullptr), file_size(0L), read_length(0L)
+        {
+            open(file);
+        }
 #endif
 
         ~file_istream() {
@@ -177,7 +177,7 @@ namespace simple {
             close();
 #ifdef _MSC_VER
             input_file_ptr = nullptr;
-        fopen_s(&input_file_ptr, file, "rb");
+            fopen_s(&input_file_ptr, file, "rb");
 #else
             input_file_ptr = std::fopen(file, "rb");
 #endif
@@ -185,13 +185,13 @@ namespace simple {
         }
 
 #ifdef _MSC_VER
-        void open(const wchar_t * file)
-    {
-        close();
-        input_file_ptr = nullptr;
-        _wfopen_s(&input_file_ptr, file, L"rb");
-        compute_length();
-    }
+        void open(const wchar_t *file)
+        {
+            close();
+            input_file_ptr = nullptr;
+            _wfopen_s(&input_file_ptr, file, L"rb");
+            compute_length();
+        }
 #endif
 
         void close() {
@@ -436,6 +436,22 @@ namespace simple {
         return istm;
     }
 
+    template<typename same_endian_type, typename T>
+    mem_istream<same_endian_type> &operator>>(mem_istream<same_endian_type> &istm, std::vector <T> &val) {
+        static_assert(std::is_default_constructible<T>::value, "T must be default constructible");
+
+        size_t size = 0;
+        istm >> size;
+
+        for (size_t i = 0; i < size; i++) {
+            T item;  // This is why `T` must be default constructible
+            istm >> item;
+            val.push_back(item);
+        }
+
+        return istm;
+    }
+
     template<typename same_endian_type>
     class ptr_istream {
     public:
@@ -584,10 +600,10 @@ namespace simple {
         }
 
 #ifdef _MSC_VER
-        memfile_istream(const wchar_t * file) : m_arr(nullptr), m_size(0), m_index(0)
-    {
-        open(file);
-    }
+        memfile_istream(const wchar_t *file) : m_arr(nullptr), m_size(0), m_index(0)
+        {
+            open(file);
+        }
 #endif
 
         ~memfile_istream() {
@@ -597,8 +613,8 @@ namespace simple {
         void open(const char *file) {
             close();
 #ifdef _MSC_VER
-            std::FILE* input_file_ptr = nullptr;
-        fopen_s(&input_file_ptr, file, "rb");
+            std::FILE *input_file_ptr = nullptr;
+            fopen_s(&input_file_ptr, file, "rb");
 #else
             std::FILE *input_file_ptr = std::fopen(file, "rb");
 #endif
@@ -609,16 +625,16 @@ namespace simple {
         }
 
 #ifdef _MSC_VER
-        void open(const wchar_t * file)
-    {
-        close();
-        std::FILE* input_file_ptr = nullptr;
-        _wfopen_s(&input_file_ptr, file, L"rb");
-        compute_length(input_file_ptr);
-        m_arr = new char[m_size];
-        std::fread(m_arr, m_size, 1, input_file_ptr);
-        fclose(input_file_ptr);
-    }
+        void open(const wchar_t *file)
+        {
+            close();
+            std::FILE *input_file_ptr = nullptr;
+            _wfopen_s(&input_file_ptr, file, L"rb");
+            compute_length(input_file_ptr);
+            m_arr = new char[m_size];
+            std::fread(m_arr, m_size, 1, input_file_ptr);
+            fclose(input_file_ptr);
+        }
 #endif
 
         void close() {
@@ -765,10 +781,10 @@ namespace simple {
         }
 
 #ifdef _MSC_VER
-        file_ostream(const wchar_t * file) : output_file_ptr(nullptr)
-    {
-        open(file);
-    }
+        file_ostream(const wchar_t *file) : output_file_ptr(nullptr)
+        {
+            open(file);
+        }
 #endif
 
         ~file_ostream() {
@@ -779,19 +795,19 @@ namespace simple {
             close();
 #ifdef _MSC_VER
             output_file_ptr = nullptr;
-        fopen_s(&output_file_ptr, file, "wb");
+            fopen_s(&output_file_ptr, file, "wb");
 #else
             output_file_ptr = std::fopen(file, "wb");
 #endif
         }
 
 #ifdef _MSC_VER
-        void open(const wchar_t * file)
-    {
-        close();
-        output_file_ptr = nullptr;
-        _wfopen_s(&output_file_ptr, file, L"wb");
-    }
+        void open(const wchar_t *file)
+        {
+            close();
+            output_file_ptr = nullptr;
+            _wfopen_s(&output_file_ptr, file, L"wb");
+        }
 #endif
 
         void flush() {
@@ -945,6 +961,20 @@ namespace simple {
         return ostm;
     }
 
+    template<typename same_endian_type, typename T>
+    mem_ostream<same_endian_type> &operator<<(mem_ostream<same_endian_type> &ostm, const std::vector <T> &val) {
+        static_assert(std::is_default_constructible<T>::value, "T must be default constructible");
+
+        size_t size = val.size();
+        ostm << size;
+
+        for (size_t i = 0; i < val.size(); i++) {
+            ostm << val[i];
+        }
+
+        return ostm;
+    }
+
     template<typename same_endian_type>
     class memfile_ostream {
     public:
@@ -992,8 +1022,8 @@ namespace simple {
 
         bool write_to_file(const char *file) {
 #ifdef _MSC_VER
-            std::FILE* fp = nullptr;
-        fopen_s(&fp, file, "wb");
+            std::FILE *fp = nullptr;
+            fopen_s(&fp, file, "wb");
 #else
             std::FILE *fp = std::fopen(file, "wb");
 #endif
@@ -1008,20 +1038,20 @@ namespace simple {
         }
 
 #ifdef _MSC_VER
-        bool write_to_file(const wchar_t* file)
-    {
-        std::FILE* fp = nullptr;
-        _wfopen_s(&fp, file, L"wb");
-        if (fp)
+        bool write_to_file(const wchar_t *file)
         {
-            size_t size = std::fwrite(m_vec.data(), m_vec.size(), 1, fp);
-            std::fflush(fp);
-            std::fclose(fp);
-            m_vec.clear();
-            return size == 1u;
+            std::FILE *fp = nullptr;
+            _wfopen_s(&fp, file, L"wb");
+            if (fp)
+            {
+                size_t size = std::fwrite(m_vec.data(), m_vec.size(), 1, fp);
+                std::fflush(fp);
+                std::fclose(fp);
+                m_vec.clear();
+                return size == 1u;
+            }
+            return false;
         }
-        return false;
-    }
 #endif
 
     private:
